@@ -26,6 +26,12 @@ export default async function handler(req, res) {
   const anthropicVersion =
     req.headers["anthropic-version"] || "2023-06-01";
 
+  const MODEL = "claude-haiku-4-5-20251001";
+  const body =
+    req.body && typeof req.body === "object" && !Array.isArray(req.body)
+      ? { ...req.body, model: MODEL }
+      : req.body;
+
   const upstream = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -35,7 +41,7 @@ export default async function handler(req, res) {
         ? anthropicVersion[0]
         : anthropicVersion,
     },
-    body: JSON.stringify(req.body),
+    body: JSON.stringify(body),
   });
 
   const text = await upstream.text();
