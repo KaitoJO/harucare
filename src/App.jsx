@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 
 const DISABILITY_TYPES = [
   "自閉スペクトラム症",
@@ -33,6 +35,148 @@ const selectLabelStyle = {
   marginBottom: 6,
   textTransform: "uppercase",
 };
+
+function ProgramMarkdown({ text }) {
+  return (
+    <div className="program-md">
+      <ReactMarkdown
+        remarkPlugins={[remarkBreaks]}
+        components={{
+          h1: ({ children }) => (
+            <h1
+              style={{
+                fontSize: "1.2rem",
+                fontWeight: 700,
+                color: "#2d5a3d",
+                margin: "0 0 0.5em",
+                lineHeight: 1.35,
+              }}
+            >
+              {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2
+              style={{
+                fontSize: "1.08rem",
+                fontWeight: 700,
+                color: "#2d5a3d",
+                margin: "1em 0 0.45em",
+                lineHeight: 1.35,
+              }}
+            >
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3
+              style={{
+                fontSize: "1rem",
+                fontWeight: 700,
+                color: "#3a5a45",
+                margin: "0.85em 0 0.4em",
+                lineHeight: 1.35,
+              }}
+            >
+              {children}
+            </h3>
+          ),
+          p: ({ children }) => (
+            <p style={{ margin: "0.65em 0 0", lineHeight: 1.85, color: "#2a3a2a" }}>
+              {children}
+            </p>
+          ),
+          strong: ({ children }) => (
+            <strong style={{ fontWeight: 700, color: "#1a2a1a" }}>{children}</strong>
+          ),
+          em: ({ children }) => (
+            <em style={{ fontStyle: "italic", color: "#3a4a3a" }}>{children}</em>
+          ),
+          ul: ({ children }) => (
+            <ul style={{ margin: "0.5em 0 0", color: "#2a3a2a" }}>{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol style={{ margin: "0.5em 0 0", color: "#2a3a2a" }}>{children}</ol>
+          ),
+          li: ({ children }) => (
+            <li style={{ lineHeight: 1.75 }}>{children}</li>
+          ),
+          hr: () => (
+            <hr
+              style={{
+                border: "none",
+                borderTop: "1px solid #e0eae0",
+                margin: "1.1em 0",
+              }}
+            />
+          ),
+          blockquote: ({ children }) => (
+            <blockquote
+              style={{
+                margin: "0.65em 0 0",
+                padding: "0 0 0 12px",
+                borderLeft: "3px solid #c8e0cc",
+                color: "#4a5a4a",
+                lineHeight: 1.75,
+              }}
+            >
+              {children}
+            </blockquote>
+          ),
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#2d5a3d", textDecoration: "underline" }}
+            >
+              {children}
+            </a>
+          ),
+          code: ({ children, className }) => {
+            const inline = !className;
+            return inline ? (
+              <code
+                style={{
+                  fontFamily: "ui-monospace, Consolas, monospace",
+                  fontSize: "0.92em",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                  background: "#f4f3ec",
+                  color: "#1a2a1a",
+                }}
+              >
+                {children}
+              </code>
+            ) : (
+              <code className={className} style={{ display: "block" }}>
+                {children}
+              </code>
+            );
+          },
+          pre: ({ children }) => (
+            <pre
+              style={{
+                margin: "0.65em 0 0",
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "#f8faf8",
+                border: "1px solid #e0eae0",
+                overflow: "auto",
+                fontSize: "0.85em",
+                lineHeight: 1.55,
+              }}
+            >
+              {children}
+            </pre>
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 function SelectField({ label, value, options, onChange }) {
   return (
@@ -800,16 +944,8 @@ export default function App() {
                 プログラムを生成中...
               </div>
             ) : (
-              <div
-                style={{
-                  ...s.card,
-                  fontSize: 13,
-                  lineHeight: 2,
-                  color: "#2a3a2a",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {generatedProgram}
+              <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
+                <ProgramMarkdown text={generatedProgram} />
               </div>
             )}
             {!loading && (
