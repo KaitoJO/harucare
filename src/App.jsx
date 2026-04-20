@@ -27,6 +27,7 @@ const REFERENCE_CASE = `【実際の支援事例】
 
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 const SAVED_PROGRAMS_STORAGE_KEY = "harucare:saved-programs:v1";
+const SUPPORT_RECORDS_STORAGE_KEY = "harucare:support-records:v1";
 
 function formatJaDateTime(iso) {
   try {
@@ -34,6 +35,24 @@ function formatJaDateTime(iso) {
   } catch {
     return iso;
   }
+}
+
+function formatJaDate(yyyyMmDd) {
+  try {
+    const [y, m, d] = String(yyyyMmDd).split("-").map((v) => Number(v));
+    if (!y || !m || !d) return String(yyyyMmDd);
+    return new Date(y, m - 1, d).toLocaleDateString("ja-JP");
+  } catch {
+    return String(yyyyMmDd);
+  }
+}
+
+function todayYyyyMmDd() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function loadSavedPrograms() {
@@ -59,6 +78,33 @@ function loadSavedPrograms() {
 function persistSavedPrograms(programs) {
   try {
     localStorage.setItem(SAVED_PROGRAMS_STORAGE_KEY, JSON.stringify(programs));
+  } catch {
+    // localStorage が使えない/容量超過でもアプリ自体は動かす
+  }
+}
+
+function loadSupportRecords() {
+  try {
+    const raw = localStorage.getItem(SUPPORT_RECORDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (r) =>
+        r &&
+        typeof r === "object" &&
+        typeof r.id === "string" &&
+        typeof r.childName === "string" &&
+        typeof r.date === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistSupportRecords(records) {
+  try {
+    localStorage.setItem(SUPPORT_RECORDS_STORAGE_KEY, JSON.stringify(records));
   } catch {
     // localStorage が使えない/容量超過でもアプリ自体は動かす
   }
@@ -333,6 +379,14 @@ export default function App() {
   const [selectedSaved, setSelectedSaved] = useState(null);
   const [printPayload, setPrintPayload] = useState(null);
   const [printRequested, setPrintRequested] = useState(false);
+  const [supportRecords, setSupportRecords] = useState(() => loadSupportRecords());
+  const [recordForm, setRecordForm] = useState({
+    date: todayYyyyMmDd(),
+    mood: "",
+    success: "",
+    challenges: "",
+    handover: "",
+  });
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -351,6 +405,10 @@ export default function App() {
   useEffect(() => {
     persistSavedPrograms(savedPrograms);
   }, [savedPrograms]);
+
+  useEffect(() => {
+    persistSupportRecords(supportRecords);
+  }, [supportRecords]);
 
   useEffect(() => {
     if (!printRequested) return;
@@ -393,6 +451,14 @@ export default function App() {
     const group = savedGroups.find((g) => g.childName === selectedSavedChildName);
     return group?.items ?? [];
   }, [savedGroups, selectedSavedChildName]);
+
+  const selectedSupportRecords = useMemo(() => {
+    if (!selectedChild?.name) return [];
+    return supportRecords
+      .filter((r) => r.childName === selectedChild.name)
+      .slice()
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  }, [supportRecords, selectedChild]);
 
   const saveChild = () => {
     if (!form.name) return;
@@ -477,6 +543,10 @@ export default function App() {
       return;
     }
     if (screen === "program") {
+      setScreen("detail");
+      return;
+    }
+    if (screen === "recordAdd") {
       setScreen("detail");
       return;
     }
@@ -1061,6 +1131,97 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            <div style={s.card}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#2d5a3d" }}>
+                  支援記録
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecordForm({
+                      date: todayYyyyMmDd(),
+                      mood: "",
+                      success: "",
+                      challenges: "",
+                      handover: "",
+                    });
+                    setScreen("recordAdd");
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    background: "transparent",
+                    color: "#2d5a3d",
+                    border: "2px solid #c8e0cc",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  支援記録を追加
+                </button>
+              </div>
+
+              {selectedSupportRecords.length === 0 ? (
+                <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
+                  まだ記録がありません。右上の「支援記録を追加」から追加できます。
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {selectedSupportRecords.map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        border: "1px solid #e0eae0",
+                        borderRadius: 12,
+                        padding: "12px 12px",
+                        background: "#fafcfa",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a" }}>
+                        {formatJaDate(r.date)}
+                      </div>
+                      {r.mood && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                          <span style={{ color: "#7a8a7a" }}>今日の様子：</span>
+                          {r.mood}
+                        </div>
+                      )}
+                      {r.success && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                          <span style={{ color: "#7a8a7a" }}>できたこと：</span>
+                          {r.success}
+                        </div>
+                      )}
+                      {r.challenges && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                          <span style={{ color: "#7a8a7a" }}>課題：</span>
+                          {r.challenges}
+                        </div>
+                      )}
+                      {r.handover && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                          <span style={{ color: "#7a8a7a" }}>次回への申し送り：</span>
+                          {r.handover}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={handleGenerate}
@@ -1072,6 +1233,111 @@ export default function App() {
               }}
             >
               🌿 6ヶ月プログラムを生成する
+            </button>
+          </div>
+        )}
+
+        {screen === "recordAdd" && selectedChild && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#2a3a2a",
+                  marginBottom: 4,
+                }}
+              >
+                支援記録を追加
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a7a" }}>
+                {selectedChild.name}
+              </div>
+            </div>
+
+            <div style={s.card}>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>日付</label>
+                <input
+                  type="date"
+                  value={recordForm.date}
+                  onChange={(e) =>
+                    setRecordForm((f) => ({ ...f, date: e.target.value }))
+                  }
+                  style={s.input}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>今日の様子</label>
+                <textarea
+                  value={recordForm.mood}
+                  onChange={(e) =>
+                    setRecordForm((f) => ({ ...f, mood: e.target.value }))
+                  }
+                  rows={3}
+                  placeholder="例：落ち着いて参加できた／眠そうだった など"
+                  style={s.textarea}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>できたこと</label>
+                <textarea
+                  value={recordForm.success}
+                  onChange={(e) =>
+                    setRecordForm((f) => ({ ...f, success: e.target.value }))
+                  }
+                  rows={3}
+                  placeholder="例：平均台を最後まで渡れた など"
+                  style={s.textarea}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>課題</label>
+                <textarea
+                  value={recordForm.challenges}
+                  onChange={(e) =>
+                    setRecordForm((f) => ({ ...f, challenges: e.target.value }))
+                  }
+                  rows={3}
+                  placeholder="例：切り替えに時間がかかった など"
+                  style={s.textarea}
+                />
+              </div>
+              <div>
+                <label style={s.label}>次回への申し送り</label>
+                <textarea
+                  value={recordForm.handover}
+                  onChange={(e) =>
+                    setRecordForm((f) => ({ ...f, handover: e.target.value }))
+                  }
+                  rows={3}
+                  placeholder="例：視覚提示を同じ位置で統一する など"
+                  style={s.textarea}
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const date = recordForm.date || todayYyyyMmDd();
+                const createdAt = new Date().toISOString();
+                const entry = {
+                  id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+                  childName: selectedChild.name,
+                  date,
+                  createdAt,
+                  mood: recordForm.mood.trim(),
+                  success: recordForm.success.trim(),
+                  challenges: recordForm.challenges.trim(),
+                  handover: recordForm.handover.trim(),
+                };
+                setSupportRecords((prev) => [entry, ...prev]);
+                setScreen("detail");
+              }}
+              style={s.btn}
+            >
+              保存する
             </button>
           </div>
         )}
