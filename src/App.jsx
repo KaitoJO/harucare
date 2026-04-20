@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 
@@ -26,6 +26,43 @@ const REFERENCE_CASE = `【実際の支援事例】
 支援のポイント：動作を短く区切る、視覚提示は常に同じ位置・形式、短時間で完了できる課題から始める、成功したらすぐほめる`;
 
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
+const SAVED_PROGRAMS_STORAGE_KEY = "harucare:saved-programs:v1";
+
+function formatJaDateTime(iso) {
+  try {
+    return new Date(iso).toLocaleString("ja-JP");
+  } catch {
+    return iso;
+  }
+}
+
+function loadSavedPrograms() {
+  try {
+    const raw = localStorage.getItem(SAVED_PROGRAMS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p) =>
+        p &&
+        typeof p === "object" &&
+        typeof p.id === "string" &&
+        typeof p.childName === "string" &&
+        typeof p.createdAt === "string" &&
+        typeof p.programText === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedPrograms(programs) {
+  try {
+    localStorage.setItem(SAVED_PROGRAMS_STORAGE_KEY, JSON.stringify(programs));
+  } catch {
+    // localStorage が使えない/容量超過でもアプリ自体は動かす
+  }
+}
 
 const selectLabelStyle = {
   display: "block",
@@ -290,6 +327,8 @@ export default function App() {
   const [generatedProgram, setGeneratedProgram] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [savedPrograms, setSavedPrograms] = useState(() => loadSavedPrograms());
+  const [selectedSaved, setSelectedSaved] = useState(null);
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -304,6 +343,12 @@ export default function App() {
   });
 
   const handleChange = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  useEffect(() => {
+    persistSavedPrograms(savedPrograms);
+  }, [savedPrograms]);
+
+  const savedCount = useMemo(() => savedPrograms.length, [savedPrograms.length]);
 
   const saveChild = () => {
     if (!form.name) return;
@@ -346,6 +391,47 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSaveProgram = () => {
+    if (!selectedChild) return;
+    if (!generatedProgram.trim()) return;
+    const createdAt = new Date().toISOString();
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childName: selectedChild.name,
+      childId: selectedChild.id ?? null,
+      createdAt,
+      createdAtLabel: formatJaDateTime(createdAt),
+      programText: generatedProgram,
+    };
+    setSavedPrograms((prev) => [entry, ...prev]);
+  };
+
+  const goBack = () => {
+    if (loading) return;
+    setError(null);
+    if (screen === "add") {
+      setScreen("list");
+      return;
+    }
+    if (screen === "detail") {
+      setScreen("list");
+      return;
+    }
+    if (screen === "program") {
+      setScreen("detail");
+      return;
+    }
+    if (screen === "savedList") {
+      setScreen("list");
+      return;
+    }
+    if (screen === "savedProgram") {
+      setScreen("savedList");
+      return;
+    }
+    setScreen("list");
   };
 
   const s = {
@@ -450,10 +536,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => {
-              if (loading) return;
-              setScreen(screen === "program" ? "detail" : "list");
-              setGeneratedProgram("");
-              setError(null);
+              goBack();
             }}
             style={{
               background: "none",
@@ -491,24 +574,43 @@ export default function App() {
           </div>
         </div>
         {screen === "list" && (
-          <button
-            type="button"
-            onClick={() => setScreen("add")}
-            style={{
-              marginLeft: "auto",
-              padding: "8px 16px",
-              borderRadius: 20,
-              background: "#2d5a3d",
-              color: "#fff",
-              border: "none",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            ＋ 追加
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setScreen("savedList")}
+              style={{
+                marginLeft: "auto",
+                padding: "8px 14px",
+                borderRadius: 20,
+                background: "transparent",
+                color: "#2d5a3d",
+                border: "2px solid #c8e0cc",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              保存済み一覧 ({savedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setScreen("add")}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 20,
+                background: "#2d5a3d",
+                color: "#fff",
+                border: "none",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              ＋ 追加
+            </button>
+          </>
         )}
       </div>
 
@@ -944,9 +1046,23 @@ export default function App() {
                 プログラムを生成中...
               </div>
             ) : (
-              <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
-                <ProgramMarkdown text={generatedProgram} />
-              </div>
+              <>
+                <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
+                  <ProgramMarkdown text={generatedProgram} />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveProgram}
+                  disabled={!generatedProgram.trim()}
+                  style={{
+                    ...s.btn,
+                    background: "#2d5a3d",
+                    opacity: generatedProgram.trim() ? 1 : 0.5,
+                  }}
+                >
+                  保存する
+                </button>
+              </>
             )}
             {!loading && (
               <div
@@ -964,6 +1080,129 @@ export default function App() {
                 ⚠️ このプログラムはAIによる提案です。専門家の判断を組み合わせてご活用ください。
               </div>
             )}
+          </div>
+        )}
+
+        {screen === "savedList" && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#2a3a2a",
+                  marginBottom: 4,
+                }}
+              >
+                保存済み一覧
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a7a" }}>
+                {savedPrograms.length}件
+              </div>
+            </div>
+
+            {savedPrograms.length === 0 ? (
+              <div style={{ ...s.card, textAlign: "center", padding: "40px 20px" }}>
+                <div style={{ fontSize: 34, marginBottom: 10 }}>📁</div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "#2a3a2a",
+                    marginBottom: 6,
+                  }}
+                >
+                  まだ保存がありません
+                </div>
+                <div style={{ fontSize: 12, color: "#7a8a7a" }}>
+                  生成後に「保存する」を押すと、ここから見返せます
+                </div>
+              </div>
+            ) : (
+              savedPrograms.map((p) => (
+                <div
+                  key={p.id}
+                  role="button"
+                  tabIndex={0}
+                  style={{ ...s.card, cursor: "pointer" }}
+                  onClick={() => {
+                    setSelectedSaved(p);
+                    setScreen("savedProgram");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedSaved(p);
+                      setScreen("savedProgram");
+                    }
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        background: "#f0f7f2",
+                        border: "1px solid #c8e0cc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 18,
+                      }}
+                    >
+                      📄
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
+                        {p.childName}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
+                        {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {screen === "savedProgram" && selectedSaved && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "#2a3a2a",
+                  marginBottom: 2,
+                }}
+              >
+                {selectedSaved.childName}の保存済みプログラム
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a7a" }}>
+                {selectedSaved.createdAtLabel || formatJaDateTime(selectedSaved.createdAt)}
+              </div>
+            </div>
+            <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
+              <ProgramMarkdown text={selectedSaved.programText} />
+            </div>
+            <div
+              style={{
+                padding: 14,
+                borderRadius: 12,
+                background: "#f0f7f2",
+                border: "1px solid #c8e0cc",
+                fontSize: 12,
+                color: "#4a7a5a",
+                lineHeight: 1.6,
+                marginTop: 4,
+              }}
+            >
+              ⚠️ このプログラムはAIによる提案です。専門家の判断を組み合わせてご活用ください。
+            </div>
           </div>
         )}
       </div>
