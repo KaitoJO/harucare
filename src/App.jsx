@@ -329,6 +329,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savedPrograms, setSavedPrograms] = useState(() => loadSavedPrograms());
+  const [selectedSavedChildName, setSelectedSavedChildName] = useState(null);
   const [selectedSaved, setSelectedSaved] = useState(null);
   const [printPayload, setPrintPayload] = useState(null);
   const [printRequested, setPrintRequested] = useState(false);
@@ -361,6 +362,37 @@ export default function App() {
   }, [printRequested]);
 
   const savedCount = useMemo(() => savedPrograms.length, [savedPrograms.length]);
+
+  const savedGroups = useMemo(() => {
+    const groups = new Map();
+    for (const p of savedPrograms) {
+      const name = p.childName || "（名前なし）";
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(p);
+    }
+
+    const result = Array.from(groups.entries()).map(([childName, items]) => {
+      const sorted = [...items].sort((a, b) =>
+        String(b.createdAt).localeCompare(String(a.createdAt)),
+      );
+      return {
+        childName,
+        items: sorted,
+        count: sorted.length,
+        latestAt: sorted[0]?.createdAt ?? null,
+      };
+    });
+
+    // 最近保存されたグループ順
+    result.sort((a, b) => String(b.latestAt).localeCompare(String(a.latestAt)));
+    return result;
+  }, [savedPrograms]);
+
+  const selectedChildHistory = useMemo(() => {
+    if (!selectedSavedChildName) return [];
+    const group = savedGroups.find((g) => g.childName === selectedSavedChildName);
+    return group?.items ?? [];
+  }, [savedGroups, selectedSavedChildName]);
 
   const saveChild = () => {
     if (!form.name) return;
@@ -452,8 +484,12 @@ export default function App() {
       setScreen("list");
       return;
     }
-    if (screen === "savedProgram") {
+    if (screen === "savedChildHistory") {
       setScreen("savedList");
+      return;
+    }
+    if (screen === "savedProgram") {
+      setScreen("savedChildHistory");
       return;
     }
     setScreen("list");
@@ -1165,21 +1201,23 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              savedPrograms.map((p) => (
+              savedGroups.map((g) => (
                 <div
-                  key={p.id}
+                  key={g.childName}
                   role="button"
                   tabIndex={0}
                   style={{ ...s.card, cursor: "pointer" }}
                   onClick={() => {
-                    setSelectedSaved(p);
-                    setScreen("savedProgram");
+                    setSelectedSavedChildName(g.childName);
+                    setSelectedSaved(null);
+                    setScreen("savedChildHistory");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setSelectedSaved(p);
-                      setScreen("savedProgram");
+                      setSelectedSavedChildName(g.childName);
+                      setSelectedSaved(null);
+                      setScreen("savedChildHistory");
                     }
                   }}
                 >
@@ -1201,10 +1239,10 @@ export default function App() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
-                        {p.childName}
+                        {g.childName}
                       </div>
                       <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
-                        {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                        {g.latestAt ? `${formatJaDateTime(g.latestAt)} · ${g.count}件` : `${g.count}件`}
                       </div>
                     </div>
                     <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
@@ -1212,6 +1250,73 @@ export default function App() {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {screen === "savedChildHistory" && selectedSavedChildName && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#2a3a2a",
+                  marginBottom: 4,
+                }}
+              >
+                {selectedSavedChildName}の履歴
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a7a" }}>
+                {selectedChildHistory.length}件（新しい順）
+              </div>
+            </div>
+
+            {selectedChildHistory.map((p) => (
+              <div
+                key={p.id}
+                role="button"
+                tabIndex={0}
+                style={{ ...s.card, cursor: "pointer" }}
+                onClick={() => {
+                  setSelectedSaved(p);
+                  setScreen("savedProgram");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedSaved(p);
+                    setScreen("savedProgram");
+                  }
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      background: "#f0f7f2",
+                      border: "1px solid #c8e0cc",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 18,
+                    }}
+                  >
+                    🗓️
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#2a3a2a" }}>
+                      {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
+                      タップして詳細
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
