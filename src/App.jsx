@@ -370,6 +370,8 @@ export default function App() {
   const [screen, setScreen] = useState("list");
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
+  const [editingChildId, setEditingChildId] = useState(null);
+  const [editingOriginalName, setEditingOriginalName] = useState(null);
   const [generatedProgram, setGeneratedProgram] = useState("");
   const [generatedAtIso, setGeneratedAtIso] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -460,17 +462,7 @@ export default function App() {
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }, [supportRecords, selectedChild]);
 
-  const saveChild = () => {
-    if (!form.name) return;
-    setChildren((c) => [
-      ...c,
-      {
-        ...form,
-        id: Date.now(),
-        createdAt: new Date().toLocaleDateString("ja-JP"),
-        programs: [],
-      },
-    ]);
+  const resetChildForm = () => {
     setForm({
       name: "",
       age: "4歳",
@@ -483,6 +475,65 @@ export default function App() {
       goals: "",
       notes: "",
     });
+    setEditingChildId(null);
+    setEditingOriginalName(null);
+  };
+
+  const upsertChild = () => {
+    if (!form.name) return;
+    const nextName = form.name.trim();
+
+    if (editingChildId) {
+      const prevName = editingOriginalName;
+      setChildren((c) =>
+        c.map((child) =>
+          child.id === editingChildId
+            ? {
+                ...child,
+                ...form,
+                name: nextName,
+              }
+            : child,
+        ),
+      );
+
+      // 名前紐づけデータの整合性（保存済みプログラム/支援記録）
+      if (prevName && prevName !== nextName) {
+        setSavedPrograms((prev) =>
+          prev.map((p) =>
+            p.childName === prevName ? { ...p, childName: nextName } : p,
+          ),
+        );
+        setSupportRecords((prev) =>
+          prev.map((r) =>
+            r.childName === prevName ? { ...r, childName: nextName } : r,
+          ),
+        );
+        setSelectedSavedChildName((n) => (n === prevName ? nextName : n));
+        setSelectedSaved((p) =>
+          p && p.childName === prevName ? { ...p, childName: nextName } : p,
+        );
+      }
+
+      setSelectedChild((c) =>
+        c && c.id === editingChildId ? { ...c, ...form, name: nextName } : c,
+      );
+      resetChildForm();
+      setScreen("detail");
+      return;
+    }
+
+    setChildren((c) => [
+      ...c,
+      {
+        ...form,
+        name: nextName,
+        id: Date.now(),
+        createdAt: new Date().toLocaleDateString("ja-JP"),
+        programs: [],
+      },
+    ]);
+    resetChildForm();
     setScreen("list");
   };
 
@@ -535,6 +586,7 @@ export default function App() {
     if (loading) return;
     setError(null);
     if (screen === "add") {
+      resetChildForm();
       setScreen("list");
       return;
     }
@@ -894,7 +946,7 @@ export default function App() {
                   marginBottom: 4,
                 }}
               >
-                お子さまを登録
+                {editingChildId ? "お子さま情報を編集" : "お子さまを登録"}
               </div>
             </div>
             <div style={s.card}>
@@ -990,11 +1042,11 @@ export default function App() {
             </div>
             <button
               type="button"
-              onClick={saveChild}
+              onClick={upsertChild}
               disabled={!form.name}
               style={{ ...s.btn, opacity: form.name ? 1 : 0.5 }}
             >
-              登録する
+              {editingChildId ? "更新する" : "登録する"}
             </button>
           </div>
         )}
@@ -1053,6 +1105,82 @@ export default function App() {
                     {selectedChild.age} · {selectedChild.disability} ·{" "}
                     {selectedChild.severity}
                   </div>
+                </div>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingChildId(selectedChild.id);
+                      setEditingOriginalName(selectedChild.name);
+                      setForm({
+                        name: selectedChild.name || "",
+                        age: selectedChild.age || "4歳",
+                        disability: selectedChild.disability || "自閉スペクトラム症",
+                        severity: selectedChild.severity || "中度",
+                        motorLevel: selectedChild.motorLevel || "中",
+                        communicationLevel:
+                          selectedChild.communicationLevel || "低",
+                        socialLevel: selectedChild.socialLevel || "低",
+                        currentIssues: selectedChild.currentIssues || "",
+                        goals: selectedChild.goals || "",
+                        notes: selectedChild.notes || "",
+                      });
+                      setScreen("add");
+                    }}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.12)",
+                      color: "#fff",
+                      border: "1px solid rgba(255,255,255,0.25)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ok = window.confirm(
+                        `${selectedChild.name} を削除しますか？\n（保存済みプログラム・支援記録も一覧から除外されます）`,
+                      );
+                      if (!ok) return;
+                      const nameToDelete = selectedChild.name;
+                      const idToDelete = selectedChild.id;
+                      setChildren((c) => c.filter((x) => x.id !== idToDelete));
+                      setSavedPrograms((prev) =>
+                        prev.filter((p) => p.childName !== nameToDelete),
+                      );
+                      setSupportRecords((prev) =>
+                        prev.filter((r) => r.childName !== nameToDelete),
+                      );
+                      setSelectedSavedChildName((n) =>
+                        n === nameToDelete ? null : n,
+                      );
+                      setSelectedSaved((p) =>
+                        p && p.childName === nameToDelete ? null : p,
+                      );
+                      setSelectedChild(null);
+                      resetChildForm();
+                      setScreen("list");
+                    }}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.12)",
+                      color: "#fff",
+                      border: "1px solid rgba(255,255,255,0.25)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    削除
+                  </button>
                 </div>
               </div>
               <div
