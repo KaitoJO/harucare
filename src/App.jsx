@@ -325,10 +325,13 @@ export default function App() {
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   const [generatedProgram, setGeneratedProgram] = useState("");
+  const [generatedAtIso, setGeneratedAtIso] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savedPrograms, setSavedPrograms] = useState(() => loadSavedPrograms());
   const [selectedSaved, setSelectedSaved] = useState(null);
+  const [printPayload, setPrintPayload] = useState(null);
+  const [printRequested, setPrintRequested] = useState(false);
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -347,6 +350,15 @@ export default function App() {
   useEffect(() => {
     persistSavedPrograms(savedPrograms);
   }, [savedPrograms]);
+
+  useEffect(() => {
+    if (!printRequested) return;
+    const t = setTimeout(() => {
+      window.print();
+      setPrintRequested(false);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [printRequested]);
 
   const savedCount = useMemo(() => savedPrograms.length, [savedPrograms.length]);
 
@@ -380,11 +392,13 @@ export default function App() {
     if (!selectedChild) return;
     setError(null);
     setGeneratedProgram("");
+    setGeneratedAtIso(null);
     setLoading(true);
     setScreen("program");
     try {
       const text = await requestProgramFromClaude(selectedChild);
       setGeneratedProgram(text);
+      setGeneratedAtIso(new Date().toISOString());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setScreen("detail");
@@ -396,7 +410,7 @@ export default function App() {
   const handleSaveProgram = () => {
     if (!selectedChild) return;
     if (!generatedProgram.trim()) return;
-    const createdAt = new Date().toISOString();
+    const createdAt = generatedAtIso || new Date().toISOString();
     const entry = {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
       childName: selectedChild.name,
@@ -406,6 +420,17 @@ export default function App() {
       programText: generatedProgram,
     };
     setSavedPrograms((prev) => [entry, ...prev]);
+  };
+
+  const handlePrint = ({ childName, iso, programText }) => {
+    if (!programText?.trim()) return;
+    const createdAt = iso || new Date().toISOString();
+    setPrintPayload({
+      childName,
+      dateLabel: formatJaDateTime(createdAt),
+      programText,
+    });
+    setPrintRequested(true);
   };
 
   const goBack = () => {
@@ -530,7 +555,7 @@ export default function App() {
   };
 
   return (
-    <div style={s.wrap}>
+    <div style={s.wrap} className="app-root">
       <div style={s.header}>
         {screen !== "list" && (
           <button
@@ -1062,6 +1087,27 @@ export default function App() {
                 >
                   保存する
                 </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handlePrint({
+                      childName: selectedChild.name,
+                      iso: generatedAtIso,
+                      programText: generatedProgram,
+                    })
+                  }
+                  disabled={!generatedProgram.trim()}
+                  style={{
+                    ...s.btn,
+                    background: "transparent",
+                    color: "#2d5a3d",
+                    border: "2px solid #c8e0cc",
+                    opacity: generatedProgram.trim() ? 1 : 0.5,
+                    marginTop: 10,
+                  }}
+                >
+                  印刷する
+                </button>
               </>
             )}
             {!loading && (
@@ -1189,6 +1235,24 @@ export default function App() {
             <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
               <ProgramMarkdown text={selectedSaved.programText} />
             </div>
+            <button
+              type="button"
+              onClick={() =>
+                handlePrint({
+                  childName: selectedSaved.childName,
+                  iso: selectedSaved.createdAt,
+                  programText: selectedSaved.programText,
+                })
+              }
+              style={{
+                ...s.btn,
+                background: "transparent",
+                color: "#2d5a3d",
+                border: "2px solid #c8e0cc",
+              }}
+            >
+              印刷する
+            </button>
             <div
               style={{
                 padding: 14,
@@ -1202,6 +1266,23 @@ export default function App() {
               }}
             >
               ⚠️ このプログラムはAIによる提案です。専門家の判断を組み合わせてご活用ください。
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 印刷専用（@media print でこの領域だけ表示） */}
+      <div className="print-area" aria-hidden="true">
+        {printPayload && (
+          <div className="print-page">
+            <div className="print-header">
+              <div className="print-title">
+                {printPayload.childName}の個別支援プログラム
+              </div>
+              <div className="print-sub">{printPayload.dateLabel}</div>
+            </div>
+            <div className="print-body">
+              <ProgramMarkdown text={printPayload.programText} />
             </div>
           </div>
         )}
