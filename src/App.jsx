@@ -842,7 +842,7 @@ export default function App() {
       <div style={s.body}>
         {screen === "list" && (
           <div>
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 16 }}>
               <div
                 style={{
                   fontSize: 17,
@@ -864,6 +864,78 @@ export default function App() {
                   )}
               </div>
             </div>
+
+            {/* 登録件数に関わらず常に表示（0件でも検索・フィルターUIを出す） */}
+            <div style={{ ...s.card, marginBottom: 12 }}>
+              <label style={s.label}>名前で検索</label>
+              <input
+                type="search"
+                value={listSearchQuery}
+                onChange={(e) => setListSearchQuery(e.target.value)}
+                placeholder="お子さまの名前で検索"
+                style={s.input}
+                autoComplete="off"
+              />
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 14,
+                  borderTop: "1px solid #eef2ee",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: "0.12em",
+                    color: "#7a8a7a",
+                    marginBottom: 8,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  障害種別
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    flexWrap: "nowrap",
+                    gap: 6,
+                    overflowX: "auto",
+                    paddingBottom: 2,
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  {LIST_DISABILITY_FILTERS.map((f) => {
+                    const active = listDisabilityFilter === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setListDisabilityFilter(f.id)}
+                        style={{
+                          flex: "0 0 auto",
+                          padding: "8px 14px",
+                          borderRadius: 20,
+                          border: active ? "2px solid #2d5a3d" : "2px solid #d8e4d8",
+                          background: active ? "#2d5a3d" : "#fafcfa",
+                          color: active ? "#fff" : "#4a5a4a",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          fontWeight: 700,
+                          boxShadow: active
+                            ? "0 2px 8px rgba(45, 90, 61, 0.25)"
+                            : "none",
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {children.length === 0 ? (
               <div style={{ ...s.card, textAlign: "center", padding: "40px 20px" }}>
                 <div style={{ fontSize: 36, marginBottom: 12 }}>🌱</div>
@@ -894,82 +966,30 @@ export default function App() {
                   登録する
                 </button>
               </div>
+            ) : filteredChildren.length === 0 ? (
+              <div
+                style={{
+                  ...s.card,
+                  textAlign: "center",
+                  padding: "32px 20px",
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
+                  該当するお子さまが見つかりません
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#7a8a7a",
+                    marginTop: 8,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  検索語やフィルターを変えてお試しください
+                </div>
+              </div>
             ) : (
-              <>
-                <div style={{ ...s.card, marginBottom: 12 }}>
-                  <label style={s.label}>名前で検索</label>
-                  <input
-                    type="search"
-                    value={listSearchQuery}
-                    onChange={(e) => setListSearchQuery(e.target.value)}
-                    placeholder="例：たろう"
-                    style={s.input}
-                    autoComplete="off"
-                  />
-                </div>
-                <div style={{ ...s.card, marginBottom: 12 }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "#2d5a3d",
-                      marginBottom: 10,
-                    }}
-                  >
-                    障害種別で絞り込み
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {LIST_DISABILITY_FILTERS.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setListDisabilityFilter(f.id)}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: 20,
-                          border:
-                            listDisabilityFilter === f.id
-                              ? "2px solid #2d5a3d"
-                              : "2px solid #d8e4d8",
-                          background:
-                            listDisabilityFilter === f.id ? "#2d5a3d" : "transparent",
-                          color:
-                            listDisabilityFilter === f.id ? "#fff" : "#4a5a4a",
-                          fontSize: 12,
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {filteredChildren.length === 0 ? (
-                  <div
-                    style={{
-                      ...s.card,
-                      textAlign: "center",
-                      padding: "32px 20px",
-                    }}
-                  >
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
-                      該当するお子さまが見つかりません
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#7a8a7a",
-                        marginTop: 8,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      検索語やフィルターを変えてお試しください
-                    </div>
-                  </div>
-                ) : (
-                  filteredChildren.map((child) => (
+              filteredChildren.map((child) => (
                     <div
                       key={child.id}
                       role="button"
@@ -1060,8 +1080,6 @@ export default function App() {
                       </div>
                     </div>
                   ))
-                )}
-              </>
             )}
           </div>
         )}
