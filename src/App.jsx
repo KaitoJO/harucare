@@ -18,6 +18,33 @@ const AGE_OPTIONS = ["1歳", "2歳", "3歳", "4歳", "5歳", "6歳"];
 const LEVELS = ["低", "中", "高"];
 const SEVERITY = ["軽度", "中度", "重度"];
 
+/** 一覧の障害種別フィルター（登録値 DISABILITY_TYPES と対応） */
+const LIST_DISABILITY_FILTERS = [
+  { id: "all", label: "全て" },
+  { id: "autism", label: "自閉症" },
+  { id: "down", label: "ダウン症" },
+  { id: "developmental", label: "発達障害" },
+  { id: "other", label: "その他" },
+];
+
+function matchesListDisabilityFilter(disability, filterId) {
+  if (filterId === "all") return true;
+  if (filterId === "autism") return disability === "自閉スペクトラム症";
+  if (filterId === "down") return disability === "ダウン症";
+  if (filterId === "developmental") {
+    return ["発達遅滞", "ADHD", "言語障害", "学習障害（LD）"].includes(disability);
+  }
+  if (filterId === "other") {
+    const dev = ["発達遅滞", "ADHD", "言語障害", "学習障害（LD）"];
+    return (
+      disability !== "自閉スペクトラム症" &&
+      disability !== "ダウン症" &&
+      !dev.includes(disability)
+    );
+  }
+  return true;
+}
+
 const REFERENCE_CASE = `【実際の支援事例】
 障害：発達遅滞
 課題の背景：体幹・姿勢保持の弱さ、注意機能の未成熟、視覚的見通し不足、手指協調運動の未発達
@@ -389,6 +416,8 @@ export default function App() {
     challenges: "",
     handover: "",
   });
+  const [listSearchQuery, setListSearchQuery] = useState("");
+  const [listDisabilityFilter, setListDisabilityFilter] = useState("all");
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -461,6 +490,19 @@ export default function App() {
       .slice()
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }, [supportRecords, selectedChild]);
+
+  const filteredChildren = useMemo(() => {
+    const q = listSearchQuery.trim().toLowerCase();
+    return children.filter((child) => {
+      if (q && !String(child.name ?? "").toLowerCase().includes(q)) {
+        return false;
+      }
+      if (!matchesListDisabilityFilter(child.disability, listDisabilityFilter)) {
+        return false;
+      }
+      return true;
+    });
+  }, [children, listSearchQuery, listDisabilityFilter]);
 
   const resetChildForm = () => {
     setForm({
@@ -813,6 +855,13 @@ export default function App() {
               </div>
               <div style={{ fontSize: 12, color: "#7a8a7a" }}>
                 {children.length}名登録中
+                {children.length > 0 &&
+                  (listSearchQuery.trim() || listDisabilityFilter !== "all") && (
+                    <>
+                      {" "}
+                      · {filteredChildren.length}名を表示
+                    </>
+                  )}
               </div>
             </div>
             {children.length === 0 ? (
@@ -846,91 +895,173 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              children.map((child) => (
-                <div
-                  key={child.id}
-                  role="button"
-                  tabIndex={0}
-                  style={{ ...s.card, cursor: "pointer" }}
-                  onClick={() => {
-                    setSelectedChild(child);
-                    setScreen("detail");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setSelectedChild(child);
-                      setScreen("detail");
-                    }
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        background: "#e8f2eb",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 22,
-                      }}
-                    >
-                      👦
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 700,
-                          color: "#2a3a2a",
-                          marginBottom: 4,
-                        }}
-                      >
-                        {child.name}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <span style={s.tag("green")}>{child.age}</span>
-                        <span style={s.tag("default")}>{child.disability}</span>
-                        <span style={s.tag("gold")}>{child.severity}</span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
-                  </div>
+              <>
+                <div style={{ ...s.card, marginBottom: 12 }}>
+                  <label style={s.label}>名前で検索</label>
+                  <input
+                    type="search"
+                    value={listSearchQuery}
+                    onChange={(e) => setListSearchQuery(e.target.value)}
+                    placeholder="例：たろう"
+                    style={s.input}
+                    autoComplete="off"
+                  />
+                </div>
+                <div style={{ ...s.card, marginBottom: 12 }}>
                   <div
                     style={{
-                      marginTop: 10,
-                      paddingTop: 10,
-                      borderTop: "1px solid #f0f0f0",
-                      display: "flex",
-                      gap: 12,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#2d5a3d",
+                      marginBottom: 10,
                     }}
                   >
-                    <div style={{ fontSize: 11, color: "#7a8a7a" }}>
-                      運動{" "}
-                      <span style={{ color: "#2a3a2a", fontWeight: 700 }}>
-                        {child.motorLevel}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: "#7a8a7a" }}>
-                      コミュ{" "}
-                      <span style={{ color: "#2a3a2a", fontWeight: 700 }}>
-                        {child.communicationLevel}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 11, color: "#7a8a7a" }}>
-                      社会性{" "}
-                      <span style={{ color: "#2a3a2a", fontWeight: 700 }}>
-                        {child.socialLevel}
-                      </span>
-                    </div>
-                    <div style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}>
-                      {child.createdAt}
-                    </div>
+                    障害種別で絞り込み
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {LIST_DISABILITY_FILTERS.map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setListDisabilityFilter(f.id)}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 20,
+                          border:
+                            listDisabilityFilter === f.id
+                              ? "2px solid #2d5a3d"
+                              : "2px solid #d8e4d8",
+                          background:
+                            listDisabilityFilter === f.id ? "#2d5a3d" : "transparent",
+                          color:
+                            listDisabilityFilter === f.id ? "#fff" : "#4a5a4a",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))
+                {filteredChildren.length === 0 ? (
+                  <div
+                    style={{
+                      ...s.card,
+                      textAlign: "center",
+                      padding: "32px 20px",
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
+                      該当するお子さまが見つかりません
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#7a8a7a",
+                        marginTop: 8,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      検索語やフィルターを変えてお試しください
+                    </div>
+                  </div>
+                ) : (
+                  filteredChildren.map((child) => (
+                    <div
+                      key={child.id}
+                      role="button"
+                      tabIndex={0}
+                      style={{ ...s.card, cursor: "pointer" }}
+                      onClick={() => {
+                        setSelectedChild(child);
+                        setScreen("detail");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedChild(child);
+                          setScreen("detail");
+                        }
+                      }}
+                    >
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: 12 }}
+                      >
+                        <div
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 12,
+                            background: "#e8f2eb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 22,
+                          }}
+                        >
+                          👦
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: "#2a3a2a",
+                              marginBottom: 4,
+                            }}
+                          >
+                            {child.name}
+                          </div>
+                          <div
+                            style={{ display: "flex", gap: 6, flexWrap: "wrap" }}
+                          >
+                            <span style={s.tag("green")}>{child.age}</span>
+                            <span style={s.tag("default")}>{child.disability}</span>
+                            <span style={s.tag("gold")}>{child.severity}</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 10,
+                          paddingTop: 10,
+                          borderTop: "1px solid #f0f0f0",
+                          display: "flex",
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ fontSize: 11, color: "#7a8a7a" }}>
+                          運動{" "}
+                          <span style={{ color: "#2a3a2a", fontWeight: 700 }}>
+                            {child.motorLevel}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#7a8a7a" }}>
+                          コミュ{" "}
+                          <span style={{ color: "#2a3a2a", fontWeight: 700 }}>
+                            {child.communicationLevel}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#7a8a7a" }}>
+                          社会性{" "}
+                          <span style={{ color: "#2a3a2a", fontWeight: 700 }}>
+                            {child.socialLevel}
+                          </span>
+                        </div>
+                        <div
+                          style={{ marginLeft: "auto", fontSize: 11, color: "#aaa" }}
+                        >
+                          {child.createdAt}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </>
             )}
           </div>
         )}
