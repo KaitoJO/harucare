@@ -279,13 +279,6 @@ function ProgramMarkdown({ text }) {
   );
 }
 
-function isSpeechRecognitionAvailable() {
-  return (
-    typeof window !== "undefined" &&
-    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-  );
-}
-
 function appendVoiceTranscript(prev, addition) {
   const a = String(addition ?? "")
     .replace(/\s+/g, " ")
@@ -312,66 +305,218 @@ const sTextareaBase = {
   lineHeight: 1.6,
 };
 
+function pickMediaRecorderMimeType() {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) {
+    return "";
+  }
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+  ];
+  for (const t of candidates) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
+
+function isWhisperVoiceSupported() {
+  return (
+    typeof window !== "undefined" &&
+    !!import.meta.env.VITE_OPENAI_API_KEY &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== "undefined"
+  );
+}
+
+async function transcribeAudioWithOpenAI(blob, apiKey) {
+  if (import.meta.env.DEV) {
+    const fd = new FormData();
+    const type = blob.type || "audio/webm";
+    const ext =
+      type.includes("mp4") || type.includes("m4a")
+        ? "m4a"
+        : type.includes("ogg")
+          ? "ogg"
+          : "webm";
+    fd.append("file", blob, `recording.${ext}`);
+    fd.append("model", "whisper-1");
+    fd.append("language", "ja");
+
+    const res = await fetch("/openai-api/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const errJson = await res.json();
+        if (errJson?.error?.message) detail = errJson.error.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    return typeof data.text === "string" ? data.text : "";
+  }
+
+  const base64 = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const s = String(fr.result || "");
+      const i = s.indexOf(",");
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    fr.onerror = () => reject(new Error("read failed"));
+    fr.readAsDataURL(blob);
+  });
+
+  const res = await fetch("/api/whisper", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      audioBase64: base64,
+      mimeType: blob.type || "audio/webm",
+    }),
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errJson = await res.json();
+      if (errJson?.error?.message) detail = errJson.error.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  const data = await res.json();
+  return typeof data.text === "string" ? data.text : "";
+}
+
 /**
- * テキストエリア右下にマイク。Web Speech API（ja-JP）。認識結果は既存テキストに追記。
- * 非対応ブラウザではマイク非表示。
+ * テキストエリア右下にマイク。MediaRecorder で録音し OpenAI Whisper に送信。結果は既存テキストに追記。
+ * API キー未設定または非対応環境ではマイク非表示。
  */
 function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
-  const supported = useMemo(() => isSpeechRecognitionAvailable(), []);
-  const recognitionRef = useRef(null);
+  const supported = useMemo(() => isWhisperVoiceSupported(), []);
   const valueRef = useRef(value);
-  const [listening, setListening] = useState(false);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
+  const recorderRef = useRef(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState(false);
 
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
 
-  const stopListening = useCallback(() => {
-    try {
-      recognitionRef.current?.stop?.();
-    } catch {
-      /* ignore */
-    }
-    recognitionRef.current = null;
-    setListening(false);
+  const showVoiceFailureMessage = useCallback(() => {
+    setVoiceError(true);
+    window.setTimeout(() => setVoiceError(false), 4000);
   }, []);
 
-  useEffect(() => () => stopListening(), [stopListening]);
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks?.().forEach((tr) => tr.stop());
+    streamRef.current = null;
+  }, []);
 
-  const startListening = useCallback(() => {
-    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Ctor) return;
-    stopListening();
-    const r = new Ctor();
-    r.lang = "ja-JP";
-    r.continuous = true;
-    r.interimResults = false;
-    r.onresult = (event) => {
-      let chunk = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        if (event.results[i].isFinal) {
-          chunk += event.results[i][0].transcript;
-        }
+  useEffect(
+    () => () => {
+      try {
+        recorderRef.current?.stop?.();
+      } catch {
+        /* ignore */
       }
-      const next = appendVoiceTranscript(valueRef.current, chunk);
-      valueRef.current = next;
-      onValueChange(next);
-    };
-    r.onerror = () => {
-      stopListening();
-    };
-    r.onend = () => {
-      recognitionRef.current = null;
-      setListening(false);
-    };
-    recognitionRef.current = r;
-    setListening(true);
-    try {
-      r.start();
-    } catch {
-      setListening(false);
+      stopStream();
+    },
+    [stopStream],
+  );
+
+  const onMicClick = useCallback(async () => {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (!apiKey || transcribing) return;
+
+    if (recording && recorderRef.current) {
+      try {
+        if (recorderRef.current.state === "recording") {
+          recorderRef.current.requestData?.();
+        }
+        recorderRef.current.stop();
+      } catch {
+        /* ignore */
+      }
+      recorderRef.current = null;
+      setRecording(false);
+      return;
     }
-  }, [onValueChange, stopListening]);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      streamRef.current = stream;
+      chunksRef.current = [];
+
+      const mimeType = pickMediaRecorderMimeType();
+      const rec = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      const usedMime = rec.mimeType || mimeType || "audio/webm";
+
+      rec.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      rec.onstop = async () => {
+        stopStream();
+        recorderRef.current = null;
+        const blob = new Blob(chunksRef.current, { type: usedMime });
+        chunksRef.current = [];
+        if (blob.size === 0) return;
+
+        setTranscribing(true);
+        setVoiceError(false);
+        try {
+          const text = await transcribeAudioWithOpenAI(blob, apiKey);
+          const next = appendVoiceTranscript(valueRef.current, text);
+          valueRef.current = next;
+          onValueChange(next);
+        } catch {
+          showVoiceFailureMessage();
+        } finally {
+          setTranscribing(false);
+        }
+      };
+
+      recorderRef.current = rec;
+      rec.start(250);
+      setRecording(true);
+      setVoiceError(false);
+    } catch {
+      showVoiceFailureMessage();
+    }
+  }, [
+    onValueChange,
+    recording,
+    showVoiceFailureMessage,
+    stopStream,
+    transcribing,
+  ]);
+
+  const busy = transcribing;
+  const statusLabel = transcribing
+    ? "認識中..."
+    : voiceError
+      ? "音声認識に失敗しました"
+      : "";
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -388,41 +533,72 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
         }}
       />
       {supported && (
-        <button
-          type="button"
-          title={listening ? "音声入力を停止" : "音声入力"}
-          onClick={() => (listening ? stopListening() : startListening())}
-          style={{
-            position: "absolute",
-            right: 8,
-            bottom: 8,
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            border: listening ? "2px solid #b02020" : "2px solid #c8e0cc",
-            background: listening ? "#dc3545" : "#fff",
-            color: listening ? "#fff" : "#2d5a3d",
-            fontSize: 18,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: listening
-              ? "0 2px 8px rgba(220, 53, 69, 0.35)"
-              : "0 1px 4px rgba(0,0,0,0.08)",
-            fontFamily: "inherit",
-            lineHeight: 1,
-            flexDirection: "column",
-            gap: 0,
-            padding: 0,
-          }}
-        >
-          {listening ? (
-            <span style={{ fontSize: 10, fontWeight: 800 }}>停止</span>
-          ) : (
-            <span aria-hidden>🎤</span>
-          )}
-        </button>
+        <>
+          {statusLabel ? (
+            <span
+              style={{
+                position: "absolute",
+                right: 52,
+                bottom: 16,
+                fontSize: 11,
+                color: voiceError ? "#b02020" : "#5a6a5a",
+                fontWeight: 600,
+                maxWidth: "calc(100% - 64px)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                pointerEvents: "none",
+              }}
+            >
+              {statusLabel}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            title={
+              recording
+                ? "録音を停止して認識"
+                : busy
+                  ? "認識中"
+                  : "音声で入力"
+            }
+            disabled={busy}
+            onClick={() => {
+              void onMicClick();
+            }}
+            style={{
+              position: "absolute",
+              right: 8,
+              bottom: 8,
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              border: recording ? "2px solid #b02020" : "2px solid #c8e0cc",
+              background: recording ? "#dc3545" : "#fff",
+              color: recording ? "#fff" : "#2d5a3d",
+              fontSize: 18,
+              cursor: busy ? "not-allowed" : "pointer",
+              opacity: busy ? 0.55 : 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: recording
+                ? "0 2px 8px rgba(220, 53, 69, 0.35)"
+                : "0 1px 4px rgba(0,0,0,0.08)",
+              fontFamily: "inherit",
+              lineHeight: 1,
+              flexDirection: "column",
+              gap: 0,
+              padding: 0,
+            }}
+          >
+            {recording ? (
+              <span style={{ fontSize: 10, fontWeight: 800 }}>停止</span>
+            ) : (
+              <span aria-hidden>🎤</span>
+            )}
+          </button>
+        </>
       )}
     </div>
   );
