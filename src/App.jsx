@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 
@@ -279,6 +279,155 @@ function ProgramMarkdown({ text }) {
   );
 }
 
+function isSpeechRecognitionAvailable() {
+  return (
+    typeof window !== "undefined" &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  );
+}
+
+function appendVoiceTranscript(prev, addition) {
+  const a = String(addition ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!a) return prev ?? "";
+  const p = prev ?? "";
+  if (!p) return a;
+  const sep = /\s$/.test(p) || p.endsWith("\n") ? "" : " ";
+  return `${p}${sep}${a}`;
+}
+
+/** VoiceAppendTextarea 用（App 内の s.textarea と同等） */
+const sTextareaBase = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "2px solid #e0eae0",
+  fontSize: 13,
+  color: "#2a3a2a",
+  background: "#fafcfa",
+  outline: "none",
+  resize: "none",
+  fontFamily: "'Hiragino Kaku Gothic ProN', sans-serif",
+  lineHeight: 1.6,
+};
+
+/**
+ * テキストエリア右下にマイク。Web Speech API（ja-JP）。認識結果は既存テキストに追記。
+ * 非対応ブラウザではマイク非表示。
+ */
+function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
+  const supported = useMemo(() => isSpeechRecognitionAvailable(), []);
+  const recognitionRef = useRef(null);
+  const valueRef = useRef(value);
+  const [listening, setListening] = useState(false);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  const stopListening = useCallback(() => {
+    try {
+      recognitionRef.current?.stop?.();
+    } catch {
+      /* ignore */
+    }
+    recognitionRef.current = null;
+    setListening(false);
+  }, []);
+
+  useEffect(() => () => stopListening(), [stopListening]);
+
+  const startListening = useCallback(() => {
+    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Ctor) return;
+    stopListening();
+    const r = new Ctor();
+    r.lang = "ja-JP";
+    r.continuous = true;
+    r.interimResults = false;
+    r.onresult = (event) => {
+      let chunk = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        if (event.results[i].isFinal) {
+          chunk += event.results[i][0].transcript;
+        }
+      }
+      const next = appendVoiceTranscript(valueRef.current, chunk);
+      valueRef.current = next;
+      onValueChange(next);
+    };
+    r.onerror = () => {
+      stopListening();
+    };
+    r.onend = () => {
+      recognitionRef.current = null;
+      setListening(false);
+    };
+    recognitionRef.current = r;
+    setListening(true);
+    try {
+      r.start();
+    } catch {
+      setListening(false);
+    }
+  }, [onValueChange, stopListening]);
+
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      <textarea
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        style={{
+          ...sTextareaBase,
+          paddingRight: supported ? 52 : undefined,
+          paddingBottom: supported ? 40 : undefined,
+          boxSizing: "border-box",
+        }}
+      />
+      {supported && (
+        <button
+          type="button"
+          title={listening ? "音声入力を停止" : "音声入力"}
+          onClick={() => (listening ? stopListening() : startListening())}
+          style={{
+            position: "absolute",
+            right: 8,
+            bottom: 8,
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            border: listening ? "2px solid #b02020" : "2px solid #c8e0cc",
+            background: listening ? "#dc3545" : "#fff",
+            color: listening ? "#fff" : "#2d5a3d",
+            fontSize: 18,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: listening
+              ? "0 2px 8px rgba(220, 53, 69, 0.35)"
+              : "0 1px 4px rgba(0,0,0,0.08)",
+            fontFamily: "inherit",
+            lineHeight: 1,
+            flexDirection: "column",
+            gap: 0,
+            padding: 0,
+          }}
+        >
+          {listening ? (
+            <span style={{ fontSize: 10, fontWeight: 800 }}>停止</span>
+          ) : (
+            <span aria-hidden>🎤</span>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SelectField({ label, value, options, onChange }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -309,7 +458,10 @@ function SelectField({ label, value, options, onChange }) {
   );
 }
 
-function buildUserPrompt(child) {
+function buildUserPrompt(child, extraPlanPrompt = "") {
+  const extra = extraPlanPrompt.trim()
+    ? `\n\n【支援計画生成の追加プロンプト】\n${extraPlanPrompt.trim()}`
+    : "";
   return `【お子さまの情報】
 名前：${child.name}
 年齢：${child.age}
@@ -325,7 +477,7 @@ function buildUserPrompt(child) {
 【あなたへの依頼】
 上記のお子さまの情報に合わせた、6ヶ月間の個別支援プログラムを日本語で作成してください。
 参考として提示した「実際の支援事例」の構成（課題の背景・支援方針・効果的な活動と理由・支援のポイント）を踏まえつつ、入力された重症度・各領域のレベル・課題・目標・備考に沿って具体化してください。
-出力は現場で使いやすいよう、見出し（■や##など）を付けた体裁にしてください。月ごとの目標・推奨活動・家庭連携の観点も含めてください。`;
+出力は現場で使いやすいよう、見出し（■や##など）を付けた体裁にしてください。月ごとの目標・推奨活動・家庭連携の観点も含めてください。${extra}`;
 }
 
 function getAnthropicUrl() {
@@ -335,7 +487,7 @@ function getAnthropicUrl() {
   return `${window.location.origin}/api/anthropic`;
 }
 
-async function requestProgramFromClaude(child) {
+async function requestProgramFromClaude(child, extraPlanPrompt = "") {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(
@@ -344,7 +496,7 @@ async function requestProgramFromClaude(child) {
   }
 
   const model = import.meta.env.VITE_ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
-  const userContent = `${REFERENCE_CASE}\n\n${buildUserPrompt(child)}`;
+  const userContent = `${REFERENCE_CASE}\n\n${buildUserPrompt(child, extraPlanPrompt)}`;
 
   const body = {
     model,
@@ -409,6 +561,8 @@ export default function App() {
   });
   const [listSearch, setListSearch] = useState("");
   const [listFilter, setListFilter] = useState("all");
+  /** 支援計画生成時に API へ渡す追加プロンプト（詳細画面） */
+  const [planPromptExtra, setPlanPromptExtra] = useState("");
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -578,7 +732,7 @@ export default function App() {
     setLoading(true);
     setScreen("program");
     try {
-      const text = await requestProgramFromClaude(selectedChild);
+      const text = await requestProgramFromClaude(selectedChild, planPromptExtra);
       setGeneratedProgram(text);
       setGeneratedAtIso(new Date().toISOString());
     } catch (e) {
@@ -1060,12 +1214,14 @@ export default function App() {
                       tabIndex={0}
                       style={{ ...s.card, cursor: "pointer" }}
                       onClick={() => {
+                        setPlanPromptExtra("");
                         setSelectedChild(child);
                         setScreen("detail");
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
+                          setPlanPromptExtra("");
                           setSelectedChild(child);
                           setScreen("detail");
                         }
@@ -1224,32 +1380,31 @@ export default function App() {
             <div style={s.card}>
               <div style={{ marginBottom: 14 }}>
                 <label style={s.label}>現在の主な課題（任意）</label>
-                <textarea
+                <VoiceAppendTextarea
                   value={form.currentIssues}
-                  onChange={(e) => handleChange("currentIssues", e.target.value)}
-                  placeholder="例：切り替えが難しい"
+                  onValueChange={(next) =>
+                    setForm((f) => ({ ...f, currentIssues: next }))
+                  }
                   rows={3}
-                  style={s.textarea}
+                  placeholder="例：切り替えが難しい"
                 />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={s.label}>半年後の目標（任意）</label>
-                <textarea
+                <VoiceAppendTextarea
                   value={form.goals}
-                  onChange={(e) => handleChange("goals", e.target.value)}
-                  placeholder="例：友達と遊べるようになってほしい"
+                  onValueChange={(next) => setForm((f) => ({ ...f, goals: next }))}
                   rows={3}
-                  style={s.textarea}
+                  placeholder="例：友達と遊べるようになってほしい"
                 />
               </div>
               <div>
                 <label style={s.label}>備考（任意）</label>
-                <textarea
+                <VoiceAppendTextarea
                   value={form.notes}
-                  onChange={(e) => handleChange("notes", e.target.value)}
-                  placeholder="例：感覚過敏あり"
+                  onValueChange={(next) => setForm((f) => ({ ...f, notes: next }))}
                   rows={2}
-                  style={s.textarea}
+                  placeholder="例：感覚過敏あり"
                 />
               </div>
             </div>
@@ -1561,6 +1716,19 @@ export default function App() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div style={s.card}>
+              <label style={s.label}>支援計画生成の追加プロンプト（任意）</label>
+              <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 8, lineHeight: 1.5 }}>
+                生成時に AI へ伝えたい指示や現場の文脈を追記できます（音声入力可）
+              </div>
+              <VoiceAppendTextarea
+                value={planPromptExtra}
+                onValueChange={setPlanPromptExtra}
+                rows={4}
+                placeholder="例：来年度の入園に向けて生活リズムを整えたい、など"
+              />
             </div>
 
             <button
