@@ -18,15 +18,6 @@ const AGE_OPTIONS = ["1歳", "2歳", "3歳", "4歳", "5歳", "6歳"];
 const LEVELS = ["低", "中", "高"];
 const SEVERITY = ["軽度", "中度", "重度"];
 
-/** 一覧の障害種別フィルター（登録値 DISABILITY_TYPES と対応） */
-const LIST_DISABILITY_FILTERS = [
-  { id: "all", label: "全て" },
-  { id: "autism", label: "自閉症" },
-  { id: "down", label: "ダウン症" },
-  { id: "developmental", label: "発達障害" },
-  { id: "other", label: "その他" },
-];
-
 function matchesListDisabilityFilter(disability, filterId) {
   if (filterId === "all") return true;
   if (filterId === "autism") return disability === "自閉スペクトラム症";
@@ -416,8 +407,8 @@ export default function App() {
     challenges: "",
     handover: "",
   });
-  const [listSearchQuery, setListSearchQuery] = useState("");
-  const [listDisabilityFilter, setListDisabilityFilter] = useState("all");
+  const [listSearch, setListSearch] = useState("");
+  const [listFilter, setListFilter] = useState("all");
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -492,17 +483,17 @@ export default function App() {
   }, [supportRecords, selectedChild]);
 
   const filteredChildren = useMemo(() => {
-    const q = listSearchQuery.trim().toLowerCase();
+    const q = listSearch.trim().toLowerCase();
     return children.filter((child) => {
       if (q && !String(child.name ?? "").toLowerCase().includes(q)) {
         return false;
       }
-      if (!matchesListDisabilityFilter(child.disability, listDisabilityFilter)) {
+      if (!matchesListDisabilityFilter(child.disability, listFilter)) {
         return false;
       }
       return true;
     });
-  }, [children, listSearchQuery, listDisabilityFilter]);
+  }, [children, listSearch, listFilter]);
 
   const resetChildForm = () => {
     setForm({
@@ -853,86 +844,159 @@ export default function App() {
               >
                 お子さま一覧
               </div>
+              <input
+                type="text"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="名前で検索"
+                style={{ ...s.input, marginBottom: 10 }}
+                autoComplete="off"
+              />
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  flexWrap: "nowrap",
+                  gap: 6,
+                  overflowX: "auto",
+                  marginBottom: 12,
+                  WebkitOverflowScrolling: "touch",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setListFilter("all")}
+                  style={{
+                    flex: "0 0 auto",
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    border:
+                      listFilter === "all" ? "2px solid #2d5a3d" : "2px solid #d8e4d8",
+                    background: listFilter === "all" ? "#2d5a3d" : "#fafcfa",
+                    color: listFilter === "all" ? "#fff" : "#4a5a4a",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    boxShadow:
+                      listFilter === "all"
+                        ? "0 2px 8px rgba(45, 90, 61, 0.25)"
+                        : "none",
+                  }}
+                >
+                  全て
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListFilter("autism")}
+                  style={{
+                    flex: "0 0 auto",
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    border:
+                      listFilter === "autism"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #d8e4d8",
+                    background: listFilter === "autism" ? "#2d5a3d" : "#fafcfa",
+                    color: listFilter === "autism" ? "#fff" : "#4a5a4a",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    boxShadow:
+                      listFilter === "autism"
+                        ? "0 2px 8px rgba(45, 90, 61, 0.25)"
+                        : "none",
+                  }}
+                >
+                  自閉症
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListFilter("down")}
+                  style={{
+                    flex: "0 0 auto",
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    border:
+                      listFilter === "down"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #d8e4d8",
+                    background: listFilter === "down" ? "#2d5a3d" : "#fafcfa",
+                    color: listFilter === "down" ? "#fff" : "#4a5a4a",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    boxShadow:
+                      listFilter === "down"
+                        ? "0 2px 8px rgba(45, 90, 61, 0.25)"
+                        : "none",
+                  }}
+                >
+                  ダウン症
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListFilter("developmental")}
+                  style={{
+                    flex: "0 0 auto",
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    border:
+                      listFilter === "developmental"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #d8e4d8",
+                    background:
+                      listFilter === "developmental" ? "#2d5a3d" : "#fafcfa",
+                    color: listFilter === "developmental" ? "#fff" : "#4a5a4a",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    boxShadow:
+                      listFilter === "developmental"
+                        ? "0 2px 8px rgba(45, 90, 61, 0.25)"
+                        : "none",
+                  }}
+                >
+                  発達障害
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListFilter("other")}
+                  style={{
+                    flex: "0 0 auto",
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    border:
+                      listFilter === "other"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #d8e4d8",
+                    background: listFilter === "other" ? "#2d5a3d" : "#fafcfa",
+                    color: listFilter === "other" ? "#fff" : "#4a5a4a",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    boxShadow:
+                      listFilter === "other"
+                        ? "0 2px 8px rgba(45, 90, 61, 0.25)"
+                        : "none",
+                  }}
+                >
+                  その他
+                </button>
+              </div>
               <div style={{ fontSize: 12, color: "#7a8a7a" }}>
                 {children.length}名登録中
                 {children.length > 0 &&
-                  (listSearchQuery.trim() || listDisabilityFilter !== "all") && (
+                  (listSearch.trim() || listFilter !== "all") && (
                     <>
                       {" "}
                       · {filteredChildren.length}名を表示
                     </>
                   )}
-              </div>
-            </div>
-
-            {/* 登録件数に関わらず常に表示（0件でも検索・フィルターUIを出す） */}
-            <div style={{ ...s.card, marginBottom: 12 }}>
-              <label style={s.label}>名前で検索</label>
-              <input
-                type="search"
-                value={listSearchQuery}
-                onChange={(e) => setListSearchQuery(e.target.value)}
-                placeholder="お子さまの名前で検索"
-                style={s.input}
-                autoComplete="off"
-              />
-              <div
-                style={{
-                  marginTop: 14,
-                  paddingTop: 14,
-                  borderTop: "1px solid #eef2ee",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    letterSpacing: "0.12em",
-                    color: "#7a8a7a",
-                    marginBottom: 8,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  障害種別
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    flexWrap: "nowrap",
-                    gap: 6,
-                    overflowX: "auto",
-                    paddingBottom: 2,
-                    WebkitOverflowScrolling: "touch",
-                  }}
-                >
-                  {LIST_DISABILITY_FILTERS.map((f) => {
-                    const active = listDisabilityFilter === f.id;
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setListDisabilityFilter(f.id)}
-                        style={{
-                          flex: "0 0 auto",
-                          padding: "8px 14px",
-                          borderRadius: 20,
-                          border: active ? "2px solid #2d5a3d" : "2px solid #d8e4d8",
-                          background: active ? "#2d5a3d" : "#fafcfa",
-                          color: active ? "#fff" : "#4a5a4a",
-                          fontSize: 12,
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                          fontWeight: 700,
-                          boxShadow: active
-                            ? "0 2px 8px rgba(45, 90, 61, 0.25)"
-                            : "none",
-                        }}
-                      >
-                        {f.label}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
 
