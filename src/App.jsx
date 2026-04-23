@@ -322,6 +322,45 @@ function SupportPlanPdfMount({ name, age, disability, programText }) {
   );
 }
 
+async function mountAndExportSupportPlanPdf({
+  name,
+  age,
+  disability,
+  programText,
+  filenameStem,
+}) {
+  const host = document.createElement("div");
+  host.style.cssText =
+    "position:fixed;left:-12000px;top:0;width:820px;opacity:0.01;pointer-events:none;z-index:-1;";
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  root.render(
+    <SupportPlanPdfMount
+      name={name}
+      age={age}
+      disability={disability}
+      programText={programText}
+    />,
+  );
+  try {
+    await new Promise((r) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(r);
+      });
+    });
+    await document.fonts.ready;
+    const inner = host.querySelector(".support-plan-pdf-root");
+    if (!inner) throw new Error("PDF root missing");
+    await exportSupportPlanPdf(
+      inner,
+      supportPlanPdfFilename(filenameStem),
+    );
+  } finally {
+    root.unmount();
+    host.remove();
+  }
+}
+
 function appendVoiceTranscript(prev, addition) {
   const a = String(addition ?? "")
     .replace(/\s+/g, " ")
@@ -981,40 +1020,42 @@ export default function App() {
   const handleExportProgramPdf = useCallback(async () => {
     if (!selectedChild || !generatedProgram.trim()) return;
     setPdfBusy(true);
-    const host = document.createElement("div");
-    host.style.cssText =
-      "position:fixed;left:-12000px;top:0;width:820px;opacity:0.01;pointer-events:none;z-index:-1;";
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    root.render(
-      <SupportPlanPdfMount
-        name={selectedChild.name}
-        age={selectedChild.age}
-        disability={selectedChild.disability}
-        programText={generatedProgram}
-      />,
-    );
     try {
-      await new Promise((r) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(r);
-        });
+      await mountAndExportSupportPlanPdf({
+        name: selectedChild.name,
+        age: selectedChild.age,
+        disability: selectedChild.disability,
+        programText: generatedProgram,
+        filenameStem: selectedChild.name,
       });
-      await document.fonts.ready;
-      const inner = host.querySelector(".support-plan-pdf-root");
-      if (!inner) throw new Error("PDF root missing");
-      await exportSupportPlanPdf(
-        inner,
-        supportPlanPdfFilename(selectedChild.name),
-      );
     } catch (e) {
       console.error(e);
     } finally {
-      root.unmount();
-      host.remove();
       setPdfBusy(false);
     }
   }, [selectedChild, generatedProgram]);
+
+  const handleExportSavedProgramPdf = useCallback(async () => {
+    if (!selectedSaved?.programText?.trim()) return;
+    setPdfBusy(true);
+    try {
+      const child =
+        children.find((c) => String(c.id) === String(selectedSaved.childId)) ||
+        children.find((c) => c.name === selectedSaved.childName);
+      const name = selectedSaved.childName;
+      await mountAndExportSupportPlanPdf({
+        name,
+        age: child?.age ?? "—",
+        disability: child?.disability ?? "—",
+        programText: selectedSaved.programText,
+        filenameStem: name,
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [selectedSaved, children]);
 
   const handlePrint = ({ childName, iso, programText }) => {
     if (!programText?.trim()) return;
@@ -1156,6 +1197,28 @@ export default function App() {
       color: c === "green" ? "#2d5a3d" : c === "gold" ? "#c4972a" : "#666",
     }),
   };
+
+  const supportPlanPrintRow = {
+    display: "flex",
+    flexFlow: "row wrap",
+    gap: 10,
+    marginTop: 10,
+    alignItems: "stretch",
+  };
+  const supportPlanRowBtn = (overrides = {}) => ({
+    ...s.btn,
+    width: "auto",
+    flex: "1 1 140px",
+    minHeight: 48,
+    paddingLeft: 12,
+    paddingRight: 12,
+    background: "transparent",
+    color: "#2d5a3d",
+    border: "2px solid #c8e0cc",
+    boxSizing: "border-box",
+    WebkitTapHighlightColor: "transparent",
+    ...overrides,
+  });
 
   return (
     <div style={s.wrap} className="app-root">
@@ -2146,28 +2209,6 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    void handleExportProgramPdf();
-                  }}
-                  disabled={!generatedProgram.trim() || pdfBusy}
-                  style={{
-                    ...s.btn,
-                    background: "transparent",
-                    color: "#2d5a3d",
-                    border: "2px solid #c8e0cc",
-                    opacity:
-                      generatedProgram.trim() && !pdfBusy ? 1 : 0.5,
-                    marginTop: 10,
-                    cursor:
-                      !generatedProgram.trim() || pdfBusy
-                        ? "not-allowed"
-                        : "pointer",
-                  }}
-                >
-                  {pdfBusy ? "PDF作成中..." : "PDFで保存"}
-                </button>
-                <button
-                  type="button"
                   onClick={handleSaveProgram}
                   disabled={!generatedProgram.trim()}
                   style={{
@@ -2179,27 +2220,45 @@ export default function App() {
                 >
                   保存する
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handlePrint({
-                      childName: selectedChild.name,
-                      iso: generatedAtIso,
-                      programText: generatedProgram,
-                    })
-                  }
-                  disabled={!generatedProgram.trim()}
-                  style={{
-                    ...s.btn,
-                    background: "transparent",
-                    color: "#2d5a3d",
-                    border: "2px solid #c8e0cc",
-                    opacity: generatedProgram.trim() ? 1 : 0.5,
-                    marginTop: 10,
-                  }}
-                >
-                  印刷する
-                </button>
+                <div style={supportPlanPrintRow}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handlePrint({
+                        childName: selectedChild.name,
+                        iso: generatedAtIso,
+                        programText: generatedProgram,
+                      })
+                    }
+                    disabled={!generatedProgram.trim()}
+                    style={supportPlanRowBtn({
+                      opacity: generatedProgram.trim() ? 1 : 0.5,
+                      cursor: !generatedProgram.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                    })}
+                  >
+                    印刷する
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleExportProgramPdf();
+                    }}
+                    disabled={!generatedProgram.trim() || pdfBusy}
+                    aria-busy={pdfBusy}
+                    style={supportPlanRowBtn({
+                      opacity:
+                        generatedProgram.trim() && !pdfBusy ? 1 : 0.5,
+                      cursor:
+                        !generatedProgram.trim() || pdfBusy
+                          ? "not-allowed"
+                          : "pointer",
+                    })}
+                  >
+                    {pdfBusy ? "作成中…" : "PDFダウンロード"}
+                  </button>
+                </div>
               </>
             )}
             {!loading && (
@@ -2396,24 +2455,35 @@ export default function App() {
             <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
               <ProgramMarkdown text={selectedSaved.programText} />
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                handlePrint({
-                  childName: selectedSaved.childName,
-                  iso: selectedSaved.createdAt,
-                  programText: selectedSaved.programText,
-                })
-              }
-              style={{
-                ...s.btn,
-                background: "transparent",
-                color: "#2d5a3d",
-                border: "2px solid #c8e0cc",
-              }}
-            >
-              印刷する
-            </button>
+            <div style={supportPlanPrintRow}>
+              <button
+                type="button"
+                onClick={() =>
+                  handlePrint({
+                    childName: selectedSaved.childName,
+                    iso: selectedSaved.createdAt,
+                    programText: selectedSaved.programText,
+                  })
+                }
+                style={supportPlanRowBtn()}
+              >
+                印刷する
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleExportSavedProgramPdf();
+                }}
+                disabled={pdfBusy}
+                aria-busy={pdfBusy}
+                style={supportPlanRowBtn({
+                  opacity: pdfBusy ? 0.5 : 1,
+                  cursor: pdfBusy ? "not-allowed" : "pointer",
+                })}
+              >
+                {pdfBusy ? "作成中…" : "PDFダウンロード"}
+              </button>
+            </div>
             <div
               style={{
                 padding: 14,
