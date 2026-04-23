@@ -145,7 +145,7 @@ function loadPlanFeedbacks() {
         (f.rating === "up" || f.rating === "down") &&
         typeof f.createdAt === "string" &&
         f.childId != null &&
-        f.childId !== "",
+        String(f.childId) !== "",
     );
   } catch {
     return [];
@@ -169,7 +169,6 @@ function getLatestPlanFeedbackForProgram(feedbacks, childId, programText) {
   return null;
 }
 
-/** localStorage 用の子どもキー（id が無いデータ向けに名前フォールバック） */
 function planFeedbackChildKey(child) {
   if (!child) return null;
   if (child.id != null && String(child.id) !== "") return child.id;
@@ -2347,17 +2346,17 @@ export default function App() {
                     paddingBottom: 14,
                   }}
                 >
-                  <div
+                  <p
                     style={{
+                      margin: "0 0 10px",
                       fontSize: 13,
                       fontWeight: 700,
                       color: "#2a3a2a",
-                      marginBottom: 10,
                       lineHeight: 1.5,
                     }}
                   >
                     この支援計画はいかがでしたか？
-                  </div>
+                  </p>
                   <div
                     style={{
                       display: "flex",
