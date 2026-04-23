@@ -169,6 +169,14 @@ function getLatestPlanFeedbackForProgram(feedbacks, childId, programText) {
   return null;
 }
 
+/** localStorage 用の子どもキー（id が無いデータ向けに名前フォールバック） */
+function planFeedbackChildKey(child) {
+  if (!child) return null;
+  if (child.id != null && String(child.id) !== "") return child.id;
+  const n = String(child.name ?? "").trim();
+  return n ? `name:${n}` : null;
+}
+
 const selectLabelStyle = {
   display: "block",
   fontSize: 10,
@@ -940,21 +948,24 @@ export default function App() {
   }, [supportRecords, selectedChild]);
 
   const currentGenPlanFeedback = useMemo(() => {
-    if (!selectedChild?.id || !generatedProgram.trim()) return null;
+    const ck = planFeedbackChildKey(selectedChild);
+    if (ck == null || !generatedProgram.trim()) return null;
     return getLatestPlanFeedbackForProgram(
       planFeedbacks,
-      selectedChild.id,
+      ck,
       generatedProgram,
     );
-  }, [planFeedbacks, selectedChild?.id, generatedProgram]);
+  }, [planFeedbacks, selectedChild, generatedProgram]);
 
   const recordPlanFeedback = useCallback(
     (rating) => {
-      if (!selectedChild?.id || !generatedProgram.trim()) return;
+      if (!selectedChild || !generatedProgram.trim()) return;
+      const ck = planFeedbackChildKey(selectedChild);
+      if (ck == null) return;
       if (rating !== "up" && rating !== "down") return;
       const entry = {
         id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
-        childId: selectedChild.id,
+        childId: ck,
         programText: generatedProgram,
         rating,
         createdAt: new Date().toISOString(),
@@ -2275,9 +2286,13 @@ export default function App() {
               <>
                 <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
                   <ProgramMarkdown text={generatedProgram} />
-                </div>
-                {generatedProgram.trim() ? (
-                  <div style={{ marginTop: 10 }}>
+                  <div
+                    style={{
+                      marginTop: 16,
+                      paddingTop: 14,
+                      borderTop: "1px solid #e8eee8",
+                    }}
+                  >
                     <div
                       style={{
                         display: "flex",
@@ -2292,6 +2307,7 @@ export default function App() {
                         aria-pressed={
                           currentGenPlanFeedback?.rating === "up"
                         }
+                        disabled={!generatedProgram.trim()}
                         onClick={() => recordPlanFeedback("up")}
                         style={{
                           flex: "1 1 120px",
@@ -2305,7 +2321,10 @@ export default function App() {
                             currentGenPlanFeedback?.rating === "up"
                               ? "#e8f2eb"
                               : "#fff",
-                          cursor: "pointer",
+                          cursor: generatedProgram.trim()
+                            ? "pointer"
+                            : "not-allowed",
+                          opacity: generatedProgram.trim() ? 1 : 0.45,
                           fontFamily: "inherit",
                           fontSize: 26,
                           lineHeight: 1,
@@ -2325,6 +2344,7 @@ export default function App() {
                         aria-pressed={
                           currentGenPlanFeedback?.rating === "down"
                         }
+                        disabled={!generatedProgram.trim()}
                         onClick={() => recordPlanFeedback("down")}
                         style={{
                           flex: "1 1 120px",
@@ -2338,7 +2358,10 @@ export default function App() {
                             currentGenPlanFeedback?.rating === "down"
                               ? "#e8f2eb"
                               : "#fff",
-                          cursor: "pointer",
+                          cursor: generatedProgram.trim()
+                            ? "pointer"
+                            : "not-allowed",
+                          opacity: generatedProgram.trim() ? 1 : 0.45,
                           fontFamily: "inherit",
                           fontSize: 26,
                           lineHeight: 1,
@@ -2369,7 +2392,7 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                ) : null}
+                </div>
                 <button
                   type="button"
                   onClick={handleSaveProgram}
