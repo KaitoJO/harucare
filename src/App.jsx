@@ -2286,112 +2286,6 @@ export default function App() {
               <>
                 <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
                   <ProgramMarkdown text={generatedProgram} />
-                  <div
-                    style={{
-                      marginTop: 16,
-                      paddingTop: 14,
-                      borderTop: "1px solid #e8eee8",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexFlow: "row wrap",
-                        gap: 10,
-                        alignItems: "stretch",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        aria-label="役に立った"
-                        aria-pressed={
-                          currentGenPlanFeedback?.rating === "up"
-                        }
-                        disabled={!generatedProgram.trim()}
-                        onClick={() => recordPlanFeedback("up")}
-                        style={{
-                          flex: "1 1 120px",
-                          minHeight: 48,
-                          borderRadius: 12,
-                          border:
-                            currentGenPlanFeedback?.rating === "up"
-                              ? "2px solid #2d5a3d"
-                              : "2px solid #d8e4d8",
-                          background:
-                            currentGenPlanFeedback?.rating === "up"
-                              ? "#e8f2eb"
-                              : "#fff",
-                          cursor: generatedProgram.trim()
-                            ? "pointer"
-                            : "not-allowed",
-                          opacity: generatedProgram.trim() ? 1 : 0.45,
-                          fontFamily: "inherit",
-                          fontSize: 26,
-                          lineHeight: 1,
-                          padding: "10px 12px",
-                          boxShadow:
-                            currentGenPlanFeedback?.rating === "up"
-                              ? "0 2px 8px rgba(45, 90, 61, 0.2)"
-                              : "0 1px 4px rgba(0,0,0,0.06)",
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        👍
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="役に立たなかった"
-                        aria-pressed={
-                          currentGenPlanFeedback?.rating === "down"
-                        }
-                        disabled={!generatedProgram.trim()}
-                        onClick={() => recordPlanFeedback("down")}
-                        style={{
-                          flex: "1 1 120px",
-                          minHeight: 48,
-                          borderRadius: 12,
-                          border:
-                            currentGenPlanFeedback?.rating === "down"
-                              ? "2px solid #2d5a3d"
-                              : "2px solid #d8e4d8",
-                          background:
-                            currentGenPlanFeedback?.rating === "down"
-                              ? "#e8f2eb"
-                              : "#fff",
-                          cursor: generatedProgram.trim()
-                            ? "pointer"
-                            : "not-allowed",
-                          opacity: generatedProgram.trim() ? 1 : 0.45,
-                          fontFamily: "inherit",
-                          fontSize: 26,
-                          lineHeight: 1,
-                          padding: "10px 12px",
-                          boxShadow:
-                            currentGenPlanFeedback?.rating === "down"
-                              ? "0 2px 8px rgba(45, 90, 61, 0.2)"
-                              : "0 1px 4px rgba(0,0,0,0.06)",
-                          WebkitTapHighlightColor: "transparent",
-                        }}
-                      >
-                        👎
-                      </button>
-                    </div>
-                    {currentGenPlanFeedback ? (
-                      <div
-                        style={{
-                          marginTop: 12,
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#2d5a3d",
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        {currentGenPlanFeedback.rating === "up"
-                          ? "フィードバックありがとうございます！"
-                          : "フィードバックありがとうございます！改善に活用します"}
-                      </div>
-                    ) : null}
-                  </div>
                 </div>
                 <button
                   type="button"
@@ -2444,6 +2338,124 @@ export default function App() {
                   >
                     {pdfBusy ? "作成中…" : "PDFダウンロード"}
                   </button>
+                </div>
+                <div
+                  style={{
+                    ...s.card,
+                    marginTop: 10,
+                    paddingTop: 14,
+                    paddingBottom: 14,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#2a3a2a",
+                      marginBottom: 10,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    この支援計画はいかがでしたか？
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexFlow: "row wrap",
+                      gap: 10,
+                      alignItems: "stretch",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      aria-label="役に立った"
+                      aria-pressed={
+                        currentGenPlanFeedback?.rating === "up"
+                      }
+                      disabled={!generatedProgram.trim()}
+                      onClick={() => recordPlanFeedback("up")}
+                      style={{
+                        flex: "1 1 120px",
+                        minHeight: 48,
+                        borderRadius: 12,
+                        border:
+                          currentGenPlanFeedback?.rating === "up"
+                            ? "2px solid #2d5a3d"
+                            : "2px solid #d8e4d8",
+                        background:
+                          currentGenPlanFeedback?.rating === "up"
+                            ? "#e8f2eb"
+                            : "#fff",
+                        cursor: generatedProgram.trim()
+                          ? "pointer"
+                          : "not-allowed",
+                        opacity: generatedProgram.trim() ? 1 : 0.45,
+                        fontFamily: "inherit",
+                        fontSize: 26,
+                        lineHeight: 1,
+                        padding: "10px 12px",
+                        boxShadow:
+                          currentGenPlanFeedback?.rating === "up"
+                            ? "0 2px 8px rgba(45, 90, 61, 0.2)"
+                            : "0 1px 4px rgba(0,0,0,0.06)",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      👍
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="役に立たなかった"
+                      aria-pressed={
+                        currentGenPlanFeedback?.rating === "down"
+                      }
+                      disabled={!generatedProgram.trim()}
+                      onClick={() => recordPlanFeedback("down")}
+                      style={{
+                        flex: "1 1 120px",
+                        minHeight: 48,
+                        borderRadius: 12,
+                        border:
+                          currentGenPlanFeedback?.rating === "down"
+                            ? "2px solid #2d5a3d"
+                            : "2px solid #d8e4d8",
+                        background:
+                          currentGenPlanFeedback?.rating === "down"
+                            ? "#e8f2eb"
+                            : "#fff",
+                        cursor: generatedProgram.trim()
+                          ? "pointer"
+                          : "not-allowed",
+                        opacity: generatedProgram.trim() ? 1 : 0.45,
+                        fontFamily: "inherit",
+                        fontSize: 26,
+                        lineHeight: 1,
+                        padding: "10px 12px",
+                        boxShadow:
+                          currentGenPlanFeedback?.rating === "down"
+                            ? "0 2px 8px rgba(45, 90, 61, 0.2)"
+                            : "0 1px 4px rgba(0,0,0,0.06)",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      👎
+                    </button>
+                  </div>
+                  {currentGenPlanFeedback ? (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#2d5a3d",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {currentGenPlanFeedback.rating === "up"
+                        ? "フィードバックありがとうございます！"
+                        : "フィードバックありがとうございます！改善に活用します"}
+                    </div>
+                  ) : null}
                 </div>
               </>
             )}
