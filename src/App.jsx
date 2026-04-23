@@ -2319,6 +2319,40 @@ export default function App() {
                   >
                     印刷する
                   </button>
+                  <div
+                    style={{ textAlign: "center", margin: "16px 0" }}
+                  >
+                    <p style={{ marginBottom: "8px" }}>
+                      この支援計画はいかがでしたか？
+                    </p>
+                    <button
+                      onClick={() =>
+                        alert("👍 ありがとうございます！")
+                      }
+                      style={{
+                        fontSize: "24px",
+                        marginRight: "16px",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      👍
+                    </button>
+                    <button
+                      onClick={() =>
+                        alert("👎 改善に活用します！")
+                      }
+                      style={{
+                        fontSize: "24px",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      👎
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
