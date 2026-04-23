@@ -48,6 +48,7 @@ const REFERENCE_CASE = `【実際の支援事例】
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 const SAVED_PROGRAMS_STORAGE_KEY = "harucare:saved-programs:v1";
 const SUPPORT_RECORDS_STORAGE_KEY = "harucare:support-records:v1";
+const PLAN_FEEDBACK_STORAGE_KEY = "harucare:plan-feedback:v1";
 
 function formatJaDateTime(iso) {
   try {
@@ -128,6 +129,44 @@ function persistSupportRecords(records) {
   } catch {
     // localStorage が使えない/容量超過でもアプリ自体は動かす
   }
+}
+
+function loadPlanFeedbacks() {
+  try {
+    const raw = localStorage.getItem(PLAN_FEEDBACK_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (f) =>
+        f &&
+        typeof f === "object" &&
+        typeof f.programText === "string" &&
+        (f.rating === "up" || f.rating === "down") &&
+        typeof f.createdAt === "string" &&
+        f.childId != null &&
+        f.childId !== "",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistPlanFeedbacks(items) {
+  try {
+    localStorage.setItem(PLAN_FEEDBACK_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    /* ignore */
+  }
+}
+
+function getLatestPlanFeedbackForProgram(feedbacks, childId, programText) {
+  const cid = String(childId);
+  for (let i = feedbacks.length - 1; i >= 0; i -= 1) {
+    const f = feedbacks[i];
+    if (String(f.childId) === cid && f.programText === programText) return f;
+  }
+  return null;
 }
 
 const selectLabelStyle = {
@@ -822,6 +861,7 @@ export default function App() {
   const [listFilter, setListFilter] = useState("all");
   /** 支援計画生成時に API へ渡す追加プロンプト（詳細画面） */
   const [planPromptExtra, setPlanPromptExtra] = useState("");
+  const [planFeedbacks, setPlanFeedbacks] = useState(() => loadPlanFeedbacks());
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -844,6 +884,10 @@ export default function App() {
   useEffect(() => {
     persistSupportRecords(supportRecords);
   }, [supportRecords]);
+
+  useEffect(() => {
+    persistPlanFeedbacks(planFeedbacks);
+  }, [planFeedbacks]);
 
   useEffect(() => {
     if (!printRequested) return;
@@ -894,6 +938,31 @@ export default function App() {
       .slice()
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }, [supportRecords, selectedChild]);
+
+  const currentGenPlanFeedback = useMemo(() => {
+    if (!selectedChild?.id || !generatedProgram.trim()) return null;
+    return getLatestPlanFeedbackForProgram(
+      planFeedbacks,
+      selectedChild.id,
+      generatedProgram,
+    );
+  }, [planFeedbacks, selectedChild?.id, generatedProgram]);
+
+  const recordPlanFeedback = useCallback(
+    (rating) => {
+      if (!selectedChild?.id || !generatedProgram.trim()) return;
+      if (rating !== "up" && rating !== "down") return;
+      const entry = {
+        id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
+        childId: selectedChild.id,
+        programText: generatedProgram,
+        rating,
+        createdAt: new Date().toISOString(),
+      };
+      setPlanFeedbacks((prev) => [...prev, entry]);
+    },
+    [selectedChild, generatedProgram],
+  );
 
   const filteredChildren = useMemo(() => {
     const q = listSearch.trim().toLowerCase();
@@ -2207,6 +2276,100 @@ export default function App() {
                 <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
                   <ProgramMarkdown text={generatedProgram} />
                 </div>
+                {generatedProgram.trim() ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexFlow: "row wrap",
+                        gap: 10,
+                        alignItems: "stretch",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        aria-label="役に立った"
+                        aria-pressed={
+                          currentGenPlanFeedback?.rating === "up"
+                        }
+                        onClick={() => recordPlanFeedback("up")}
+                        style={{
+                          flex: "1 1 120px",
+                          minHeight: 48,
+                          borderRadius: 12,
+                          border:
+                            currentGenPlanFeedback?.rating === "up"
+                              ? "2px solid #2d5a3d"
+                              : "2px solid #d8e4d8",
+                          background:
+                            currentGenPlanFeedback?.rating === "up"
+                              ? "#e8f2eb"
+                              : "#fff",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          fontSize: 26,
+                          lineHeight: 1,
+                          padding: "10px 12px",
+                          boxShadow:
+                            currentGenPlanFeedback?.rating === "up"
+                              ? "0 2px 8px rgba(45, 90, 61, 0.2)"
+                              : "0 1px 4px rgba(0,0,0,0.06)",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        👍
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="役に立たなかった"
+                        aria-pressed={
+                          currentGenPlanFeedback?.rating === "down"
+                        }
+                        onClick={() => recordPlanFeedback("down")}
+                        style={{
+                          flex: "1 1 120px",
+                          minHeight: 48,
+                          borderRadius: 12,
+                          border:
+                            currentGenPlanFeedback?.rating === "down"
+                              ? "2px solid #2d5a3d"
+                              : "2px solid #d8e4d8",
+                          background:
+                            currentGenPlanFeedback?.rating === "down"
+                              ? "#e8f2eb"
+                              : "#fff",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          fontSize: 26,
+                          lineHeight: 1,
+                          padding: "10px 12px",
+                          boxShadow:
+                            currentGenPlanFeedback?.rating === "down"
+                              ? "0 2px 8px rgba(45, 90, 61, 0.2)"
+                              : "0 1px 4px rgba(0,0,0,0.06)",
+                          WebkitTapHighlightColor: "transparent",
+                        }}
+                      >
+                        👎
+                      </button>
+                    </div>
+                    {currentGenPlanFeedback ? (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#2d5a3d",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {currentGenPlanFeedback.rating === "up"
+                          ? "フィードバックありがとうございます！"
+                          : "フィードバックありがとうございます！改善に活用します"}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleSaveProgram}
