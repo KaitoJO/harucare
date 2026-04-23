@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import { exportSupportPlanPdf, supportPlanPdfFilename } from "./exportSupportPlanPdf.js";
 
 const DISABILITY_TYPES = [
   "自閉スペクトラム症",
@@ -275,6 +277,47 @@ function ProgramMarkdown({ text }) {
       >
         {text}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+/** PDF 出力用（一時的に body にマウントして html2canvas する） */
+function SupportPlanPdfMount({ name, age, disability, programText }) {
+  return (
+    <div
+      className="support-plan-pdf-root"
+      style={{
+        width: 820,
+        maxWidth: 820,
+        boxSizing: "border-box",
+        padding: "4px 2px 10px",
+        background: "#fff",
+        color: "#2a3a2a",
+        fontFamily: "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif",
+        fontSize: 12.5,
+        lineHeight: 1.65,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 16,
+          fontWeight: 700,
+          color: "#2d5a3d",
+          marginBottom: 8,
+        }}
+      >
+        {name}の個別支援プログラム
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: "#6a7a6a",
+          marginBottom: 14,
+        }}
+      >
+        {age} · {disability}
+      </div>
+      <ProgramMarkdown text={programText} />
     </div>
   );
 }
@@ -721,6 +764,7 @@ export default function App() {
   const [generatedProgram, setGeneratedProgram] = useState("");
   const [generatedAtIso, setGeneratedAtIso] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState(null);
   const [savedPrograms, setSavedPrograms] = useState(() => loadSavedPrograms());
   const [selectedSavedChildName, setSelectedSavedChildName] = useState(null);
@@ -933,6 +977,44 @@ export default function App() {
     };
     setSavedPrograms((prev) => [entry, ...prev]);
   };
+
+  const handleExportProgramPdf = useCallback(async () => {
+    if (!selectedChild || !generatedProgram.trim()) return;
+    setPdfBusy(true);
+    const host = document.createElement("div");
+    host.style.cssText =
+      "position:fixed;left:-12000px;top:0;width:820px;opacity:0.01;pointer-events:none;z-index:-1;";
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    root.render(
+      <SupportPlanPdfMount
+        name={selectedChild.name}
+        age={selectedChild.age}
+        disability={selectedChild.disability}
+        programText={generatedProgram}
+      />,
+    );
+    try {
+      await new Promise((r) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(r);
+        });
+      });
+      await document.fonts.ready;
+      const inner = host.querySelector(".support-plan-pdf-root");
+      if (!inner) throw new Error("PDF root missing");
+      await exportSupportPlanPdf(
+        inner,
+        supportPlanPdfFilename(selectedChild.name),
+      );
+    } catch (e) {
+      console.error(e);
+    } finally {
+      root.unmount();
+      host.remove();
+      setPdfBusy(false);
+    }
+  }, [selectedChild, generatedProgram]);
 
   const handlePrint = ({ childName, iso, programText }) => {
     if (!programText?.trim()) return;
@@ -2064,12 +2146,35 @@ export default function App() {
                 </div>
                 <button
                   type="button"
+                  onClick={() => {
+                    void handleExportProgramPdf();
+                  }}
+                  disabled={!generatedProgram.trim() || pdfBusy}
+                  style={{
+                    ...s.btn,
+                    background: "transparent",
+                    color: "#2d5a3d",
+                    border: "2px solid #c8e0cc",
+                    opacity:
+                      generatedProgram.trim() && !pdfBusy ? 1 : 0.5,
+                    marginTop: 10,
+                    cursor:
+                      !generatedProgram.trim() || pdfBusy
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {pdfBusy ? "PDF作成中..." : "PDFで保存"}
+                </button>
+                <button
+                  type="button"
                   onClick={handleSaveProgram}
                   disabled={!generatedProgram.trim()}
                   style={{
                     ...s.btn,
                     background: "#2d5a3d",
                     opacity: generatedProgram.trim() ? 1 : 0.5,
+                    marginTop: 10,
                   }}
                 >
                   保存する
