@@ -49,6 +49,8 @@ const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 const SAVED_PROGRAMS_STORAGE_KEY = "harucare:saved-programs:v1";
 const SUPPORT_RECORDS_STORAGE_KEY = "harucare:support-records:v1";
 const PLAN_FEEDBACK_STORAGE_KEY = "harucare:plan-feedback:v1";
+/** 支援計画の AI 原文と編集後の保存先（{ original, edited, childName, date } の配列） */
+const PROGRAM_EDIT_FEEDBACK_STORAGE_KEY = "harucare:feedback";
 
 function formatJaDateTime(iso) {
   try {
@@ -128,6 +130,26 @@ function persistSupportRecords(records) {
     localStorage.setItem(SUPPORT_RECORDS_STORAGE_KEY, JSON.stringify(records));
   } catch {
     // localStorage が使えない/容量超過でもアプリ自体は動かす
+  }
+}
+
+function appendProgramEditFeedback(entry) {
+  try {
+    const raw = localStorage.getItem(PROGRAM_EDIT_FEEDBACK_STORAGE_KEY);
+    const prev = raw ? JSON.parse(raw) : [];
+    const list = Array.isArray(prev) ? prev : [];
+    list.push({
+      original: String(entry.original ?? ""),
+      edited: String(entry.edited ?? ""),
+      childName: String(entry.childName ?? ""),
+      date: String(entry.date ?? new Date().toISOString()),
+    });
+    localStorage.setItem(
+      PROGRAM_EDIT_FEEDBACK_STORAGE_KEY,
+      JSON.stringify(list),
+    );
+  } catch {
+    /* ignore */
   }
 }
 
@@ -848,6 +870,10 @@ export default function App() {
   const [editingOriginalName, setEditingOriginalName] = useState(null);
   const [generatedProgram, setGeneratedProgram] = useState("");
   const [generatedAtIso, setGeneratedAtIso] = useState(null);
+  /** 直近の AI 生成テキスト（編集前の原文・保存時の original に使う） */
+  const [programAiOriginal, setProgramAiOriginal] = useState("");
+  const [programEditMode, setProgramEditMode] = useState(false);
+  const [programEditSnapshot, setProgramEditSnapshot] = useState("");
   const [loading, setLoading] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -1067,11 +1093,15 @@ export default function App() {
     setError(null);
     setGeneratedProgram("");
     setGeneratedAtIso(null);
+    setProgramAiOriginal("");
+    setProgramEditMode(false);
+    setProgramEditSnapshot("");
     setLoading(true);
     setScreen("program");
     try {
       const text = await requestProgramFromClaude(selectedChild, planPromptExtra);
       setGeneratedProgram(text);
+      setProgramAiOriginal(text);
       setGeneratedAtIso(new Date().toISOString());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -1094,6 +1124,16 @@ export default function App() {
       programText: generatedProgram,
     };
     setSavedPrograms((prev) => [entry, ...prev]);
+    const edited = generatedProgram.trim();
+    const original =
+      (programAiOriginal || "").trim() || edited;
+    appendProgramEditFeedback({
+      original,
+      edited,
+      childName: selectedChild.name,
+      date: new Date().toISOString(),
+    });
+    setProgramEditMode(false);
   };
 
   const handleExportProgramPdf = useCallback(async () => {
@@ -2284,8 +2324,62 @@ export default function App() {
             ) : (
               <>
                 <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
-                  <ProgramMarkdown text={generatedProgram} />
+                  {programEditMode ? (
+                    <textarea
+                      value={generatedProgram}
+                      onChange={(e) => setGeneratedProgram(e.target.value)}
+                      rows={18}
+                      style={{
+                        ...s.textarea,
+                        minHeight: 280,
+                        fontSize: 13,
+                        lineHeight: 1.65,
+                      }}
+                    />
+                  ) : (
+                    <ProgramMarkdown text={generatedProgram} />
+                  )}
                 </div>
+                {programEditMode ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeneratedProgram(programEditSnapshot);
+                      setProgramEditMode(false);
+                    }}
+                    style={{
+                      ...s.btn,
+                      marginTop: 10,
+                      background: "transparent",
+                      color: "#2d5a3d",
+                      border: "2px solid #c8e0cc",
+                    }}
+                  >
+                    キャンセル
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProgramEditSnapshot(generatedProgram);
+                      setProgramEditMode(true);
+                    }}
+                    disabled={!generatedProgram.trim()}
+                    style={{
+                      ...s.btn,
+                      marginTop: 10,
+                      background: "transparent",
+                      color: "#2d5a3d",
+                      border: "2px solid #c8e0cc",
+                      opacity: generatedProgram.trim() ? 1 : 0.5,
+                      cursor: generatedProgram.trim()
+                        ? "pointer"
+                        : "not-allowed",
+                    }}
+                  >
+                    編集する
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleSaveProgram}
