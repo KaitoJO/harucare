@@ -2413,6 +2413,34 @@ export default function App() {
                   >
                     印刷する
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const edited = prompt(
+                        "支援計画を編集してください：",
+                        generatedProgram,
+                      );
+                      if (edited) {
+                        const feedback = {
+                          original: generatedProgram,
+                          edited: edited,
+                          childName: selectedChild?.name,
+                          date: new Date().toISOString(),
+                        };
+                        const existing = JSON.parse(
+                          localStorage.getItem("harucare:feedback") || "[]",
+                        );
+                        existing.push(feedback);
+                        localStorage.setItem(
+                          "harucare:feedback",
+                          JSON.stringify(existing),
+                        );
+                        alert("保存しました！");
+                      }
+                    }}
+                  >
+                    ✏️ 編集・フィードバック
+                  </button>
                   <div
                     style={{ textAlign: "center", margin: "16px 0" }}
                   >
