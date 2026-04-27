@@ -1111,6 +1111,19 @@ export default function App() {
     }
   };
 
+  const handleSaveEditFeedback = () => {
+    if (!selectedChild || !generatedProgram.trim()) return;
+    const edited = generatedProgram.trim();
+    const original = (programAiOriginal || "").trim() || edited;
+    appendProgramEditFeedback({
+      original,
+      edited,
+      childName: selectedChild.name,
+      date: new Date().toISOString(),
+    });
+    setProgramEditMode(false);
+  };
+
   const handleSaveProgram = () => {
     if (!selectedChild) return;
     if (!generatedProgram.trim()) return;
@@ -1124,16 +1137,6 @@ export default function App() {
       programText: generatedProgram,
     };
     setSavedPrograms((prev) => [entry, ...prev]);
-    const edited = generatedProgram.trim();
-    const original =
-      (programAiOriginal || "").trim() || edited;
-    appendProgramEditFeedback({
-      original,
-      edited,
-      childName: selectedChild.name,
-      date: new Date().toISOString(),
-    });
-    setProgramEditMode(false);
   };
 
   const handleExportProgramPdf = useCallback(async () => {
@@ -2341,22 +2344,43 @@ export default function App() {
                   )}
                 </div>
                 {programEditMode ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGeneratedProgram(programEditSnapshot);
-                      setProgramEditMode(false);
-                    }}
+                  <div
                     style={{
-                      ...s.btn,
+                      display: "flex",
+                      flexFlow: "row wrap",
+                      gap: 10,
                       marginTop: 10,
-                      background: "transparent",
-                      color: "#2d5a3d",
-                      border: "2px solid #c8e0cc",
                     }}
                   >
-                    キャンセル
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGeneratedProgram(programEditSnapshot);
+                        setProgramEditMode(false);
+                      }}
+                      style={supportPlanRowBtn({})}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEditFeedback}
+                      disabled={!generatedProgram.trim()}
+                      style={{
+                        ...s.btn,
+                        flex: "1 1 140px",
+                        width: "auto",
+                        minHeight: 48,
+                        background: "#2d5a3d",
+                        opacity: generatedProgram.trim() ? 1 : 0.5,
+                        cursor: generatedProgram.trim()
+                          ? "pointer"
+                          : "not-allowed",
+                      }}
+                    >
+                      保存
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
@@ -2383,12 +2407,17 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleSaveProgram}
-                  disabled={!generatedProgram.trim()}
+                  disabled={!generatedProgram.trim() || programEditMode}
                   style={{
                     ...s.btn,
                     background: "#2d5a3d",
-                    opacity: generatedProgram.trim() ? 1 : 0.5,
+                    opacity:
+                      generatedProgram.trim() && !programEditMode ? 1 : 0.5,
                     marginTop: 10,
+                    cursor:
+                      !generatedProgram.trim() || programEditMode
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   保存する
@@ -2413,68 +2442,6 @@ export default function App() {
                   >
                     印刷する
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const edited = prompt(
-                        "支援計画を編集してください：",
-                        generatedProgram,
-                      );
-                      if (edited) {
-                        const feedback = {
-                          original: generatedProgram,
-                          edited: edited,
-                          childName: selectedChild?.name,
-                          date: new Date().toISOString(),
-                        };
-                        const existing = JSON.parse(
-                          localStorage.getItem("harucare:feedback") || "[]",
-                        );
-                        existing.push(feedback);
-                        localStorage.setItem(
-                          "harucare:feedback",
-                          JSON.stringify(existing),
-                        );
-                        alert("保存しました！");
-                      }
-                    }}
-                  >
-                    ✏️ 編集・フィードバック
-                  </button>
-                  <div
-                    style={{ textAlign: "center", margin: "16px 0" }}
-                  >
-                    <p style={{ marginBottom: "8px" }}>
-                      この支援計画はいかがでしたか？
-                    </p>
-                    <button
-                      onClick={() =>
-                        alert("👍 ありがとうございます！")
-                      }
-                      style={{
-                        fontSize: "24px",
-                        marginRight: "16px",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      👍
-                    </button>
-                    <button
-                      onClick={() =>
-                        alert("👎 改善に活用します！")
-                      }
-                      style={{
-                        fontSize: "24px",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      👎
-                    </button>
-                  </div>
                   <button
                     type="button"
                     onClick={() => {
