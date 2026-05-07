@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harucare | AIサンプル個別支援計画書</title>
+    <style>
+      :root {
+        --green-900: #1f3a2a;
+        --green-800: #264934;
+        --green-700: #2d5a3d; /* appで使っている緑 */
+        --green-200: #c8e0cc;
+        --green-100: #e8f2eb;
+        --bg: #f4f7f4;
+        --card: #ffffff;
+        --text: #223326;
+        --muted: #6e7f72;
+        --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Hiragino Kaku Gothic ProN", system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 22px 16px 56px;
+      }
+
+      .header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 18px;
+        background: var(--card);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, var(--green-700), #3a7a54);
+        box-shadow: 0 10px 20px rgba(45, 90, 61, 0.18);
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+      }
+
+      .title {
+        min-width: 0;
+      }
+
+      .title h1 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.35;
+      }
+
+      .title p {
+        margin: 6px 0 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      .cta {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .cta a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: var(--green-700);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 800;
+        font-size: 13px;
+        box-shadow: 0 10px 18px rgba(45, 90, 61, 0.2);
+        white-space: nowrap;
+      }
+
+      .cta a:focus-visible {
+        outline: 3px solid rgba(45, 90, 61, 0.35);
+        outline-offset: 2px;
+      }
+
+      .cta .hint {
+        display: none;
+      }
+
+      .tabs {
+        margin-top: 14px;
+        background: var(--card);
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .tabbar {
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        background: linear-gradient(180deg, #ffffff, #fbfdfb);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      }
+
+      .tab {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 10px 10px;
+        border-radius: 12px;
+        border: 2px solid #d8e4d8;
+        background: transparent;
+        color: var(--green-800);
+        cursor: pointer;
+        font-weight: 800;
+        font-size: 13px;
+        line-height: 1.2;
+        text-align: center;
+      }
+
+      .tab[aria-selected="true"] {
+        border-color: var(--green-700);
+        background: var(--green-100);
+      }
+
+      .tab:focus-visible {
+        outline: 3px solid rgba(45, 90, 61, 0.35);
+        outline-offset: 2px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .pill {
+        background: #fafcfa;
+        border: 2px solid #e0eae0;
+        border-radius: 14px;
+        padding: 10px 12px;
+        min-width: 0;
+      }
+
+      .pill .k {
+        display: block;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        color: #7a8a7a;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+
+      .pill .v {
+        font-size: 13px;
+        font-weight: 800;
+        color: #2a3a2a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .doc {
+        background: #fff;
+        border: 1px solid #e0eae0;
+        border-radius: 14px;
+        padding: 16px 14px;
+      }
+
+      .doc h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+        color: var(--green-700);
+      }
+
+      .doc h3 {
+        margin: 14px 0 6px;
+        font-size: 13px;
+        color: var(--green-800);
+      }
+
+      .doc p,
+      .doc li {
+        margin: 6px 0 0;
+        line-height: 1.85;
+        font-size: 13px;
+      }
+
+      .doc ul {
+        margin: 6px 0 0;
+        padding-left: 1.2em;
+      }
+
+      .note {
+        margin-top: 12px;
+        padding: 12px 12px;
+        border-radius: 14px;
+        background: #f0f7f2;
+        border: 1px solid var(--green-200);
+        color: #4a7a5a;
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      @media (max-width: 760px) {
+        .header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .cta {
+          justify-content: flex-start;
+        }
+        .meta {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="header">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">H</div>
+          <div class="title">
+            <h1>障害児通所施設向け AIサンプル個別支援計画書</h1>
+            <p>
+              3つのケース（ASD / ADHD / 知的障害）をタブで切り替えて閲覧できます。実運用時は、施設の体制・本人の状態・ご家族の意向を踏まえて調整してください。
+            </p>
+          </div>
+        </div>
+        <div class="cta">
+          <a href="https://harucare-xthg.vercel.app" target="_blank" rel="noopener noreferrer">
+            Harucareを開く <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="tabs" role="region" aria-label="サンプル計画書">
+        <div class="tabbar" role="tablist" aria-label="ケース切り替え">
+          <button class="tab" role="tab" id="tab-asd" aria-controls="panel-asd" aria-selected="true">
+            ASD<br /><span style="font-weight: 700; color: #557a66; font-size: 11px">自閉スペクトラム症</span>
+          </button>
+          <button class="tab" role="tab" id="tab-adhd" aria-controls="panel-adhd" aria-selected="false">
+            ADHD<br /><span style="font-weight: 700; color: #557a66; font-size: 11px">注意欠如・多動症</span>
+          </button>
+          <button class="tab" role="tab" id="tab-id" aria-controls="panel-id" aria-selected="false">
+            知的障害<br /><span style="font-weight: 700; color: #557a66; font-size: 11px">中等度</span>
+          </button>
+        </div>
+
+        <div class="panel" id="panel-asd" role="tabpanel" aria-labelledby="tab-asd">
+          <div class="meta">
+            <div class="pill"><span class="k">子どもの名前</span><span class="v">はるくん</span></div>
+            <div class="pill"><span class="k">年齢</span><span class="v">5歳</span></div>
+            <div class="pill"><span class="k">障害種別</span><span class="v">ASD</span></div>
+          </div>
+          <div class="doc">
+            <h2>個別支援計画（サンプル）</h2>
+            <h3>1. 課題の背景（アセスメント要約）</h3>
+            <ul>
+              <li>環境の変化や見通しが立たない場面で不安が高まり、切り替えに時間がかかる。</li>
+              <li>感覚過敏（音・触覚）により、活動への集中が途切れることがある。</li>
+              <li>要求や困りごとを言語で伝えることが難しく、癇癪として表出することがある。</li>
+            </ul>
+            <h3>2. 6ヶ月の目標</h3>
+            <ul>
+              <li>視覚的な見通し（スケジュール）を活用し、切り替えの見通しが持てる回数を増やす。</li>
+              <li>要求を「指差し・カード・短い言葉」など複数手段で表現できる。</li>
+              <li>安心できるクールダウン手順を身につけ、自己調整の時間を短縮する。</li>
+            </ul>
+            <h3>3. 支援方針</h3>
+            <ul>
+              <li>「予告→選択→実行→振り返り」の一貫した手順で、見通しを提供する。</li>
+              <li>感覚過敏の負荷を下げる環境調整（席配置・イヤーマフ・刺激の整理）を行う。</li>
+              <li>コミュニケーションは成功体験を優先し、要求が通った経験を増やす。</li>
+            </ul>
+            <h3>4. 推奨活動（理由つき）</h3>
+            <ul>
+              <li>視覚スケジュール（写真/絵カード）…「次に何をするか」を明確にして不安を軽減。</li>
+              <li>選択肢提示（2択）…自己決定を促し、拒否・癇癪の予防につなげる。</li>
+              <li>クールダウンコーナー＋手順カード…落ち着く方法を「いつでも同じ」に固定して習慣化。</li>
+            </ul>
+            <h3>5. 家庭連携</h3>
+            <ul>
+              <li>家庭でも同じ絵カード（例：おやつ/トイレ/休憩）を使用し、表現手段を統一する。</li>
+              <li>切り替え前の予告時間（30秒→1分）を段階的に延長し、成功したら即時に称賛する。</li>
+            </ul>
+          </div>
+          <div class="note">⚠️ これはAIによるサンプル提案です。専門家の判断と安全配慮を最優先してください。</div>
+        </div>
+
+        <div class="panel" id="panel-adhd" role="tabpanel" aria-labelledby="tab-adhd" hidden>
+          <div class="meta">
+            <div class="pill"><span class="k">子どもの名前</span><span class="v">あおいさん</span></div>
+            <div class="pill"><span class="k">年齢</span><span class="v">6歳</span></div>
+            <div class="pill"><span class="k">障害種別</span><span class="v">ADHD</span></div>
+          </div>
+          <div class="doc">
+            <h2>個別支援計画（サンプル）</h2>
+            <h3>1. 課題の背景（アセスメント要約）</h3>
+            <ul>
+              <li>活動の開始が遅れやすく、指示を聞いても行動に移るまでに別の刺激へ注意が逸れる。</li>
+              <li>衝動性が強く、順番待ちやルール理解が必要な遊びでトラブルになりやすい。</li>
+              <li>成功体験が少ない場面では自己評価が下がり、「やりたくない」に繋がる。</li>
+            </ul>
+            <h3>2. 6ヶ月の目標</h3>
+            <ul>
+              <li>「短い指示＋視覚手がかり」で、活動開始までの時間を短縮する。</li>
+              <li>順番待ちの場面で、代替行動（手を胸に当てる/数える等）を使える。</li>
+              <li>達成の見える化（チェック）で自己効力感を高め、継続参加できる。</li>
+            </ul>
+            <h3>3. 支援方針</h3>
+            <ul>
+              <li>指示は「1回に1つ」。できたら即時にフィードバックし、次の指示へ。</li>
+              <li>環境の刺激を整理し、集中しやすい席配置・教材量に調整する。</li>
+              <li>待つ/止まるの代替行動を練習し、成功したらポイントで強化する。</li>
+            </ul>
+            <h3>4. 推奨活動（理由つき）</h3>
+            <ul>
+              <li>タイムタイマー（残り時間の可視化）…終わりが見えると継続しやすい。</li>
+              <li>ミニゲーム（ルールは1〜2個）…成功体験を積みながらルール遵守を練習。</li>
+              <li>チェックリスト（できたらシール）…「できた」を見える化し自己評価を上げる。</li>
+            </ul>
+            <h3>5. 家庭連携</h3>
+            <ul>
+              <li>家庭でも同じ「チェック→シール」の仕組みを導入し、一貫した強化を行う。</li>
+              <li>成功基準は小さく設定し、叱責よりも「できた点の言語化」を優先する。</li>
+            </ul>
+          </div>
+          <div class="note">⚠️ これはAIによるサンプル提案です。専門家の判断と安全配慮を最優先してください。</div>
+        </div>
+
+        <div class="panel" id="panel-id" role="tabpanel" aria-labelledby="tab-id" hidden>
+          <div class="meta">
+            <div class="pill"><span class="k">子どもの名前</span><span class="v">ゆうとくん</span></div>
+            <div class="pill"><span class="k">年齢</span><span class="v">4歳</span></div>
+            <div class="pill"><span class="k">障害種別</span><span class="v">知的障害（中等度）</span></div>
+          </div>
+          <div class="doc">
+            <h2>個別支援計画（サンプル）</h2>
+            <h3>1. 課題の背景（アセスメント要約）</h3>
+            <ul>
+              <li>指示理解に時間がかかり、複数手順になると混乱して途中で止まることがある。</li>
+              <li>手指の巧緻性が未熟で、身支度や道具操作で支援が必要な場面が多い。</li>
+              <li>成功/失敗の経験が行動に直結しやすく、失敗が続くと意欲が下がる。</li>
+            </ul>
+            <h3>2. 6ヶ月の目標</h3>
+            <ul>
+              <li>「1手順ずつ」の支援で、基本的な生活動作（片付け等）の自立度を上げる。</li>
+              <li>手指操作（つまむ・貼る・はめる）を段階的に練習し、作業参加を安定させる。</li>
+              <li>できた体験を積み重ね、成功後のやり取り（ハイタッチ/ことば）を増やす。</li>
+            </ul>
+            <h3>3. 支援方針</h3>
+            <ul>
+              <li>手順は「見本→一緒に→ひとりで」の順に支援量を減らす。</li>
+              <li>課題は短時間で完了できる量に調整し、達成を積み上げる。</li>
+              <li>称賛は具体的に（例：「箱に入れられたね」）伝え、再現性を高める。</li>
+            </ul>
+            <h3>4. 推奨活動（理由つき）</h3>
+            <ul>
+              <li>型はめ・はめ板…成功しやすく、手指協調と「最後までやる」を育てる。</li>
+              <li>シール貼り（台紙つき）…つまむ/貼るの練習になり、達成が見えやすい。</li>
+              <li>片付けルーティン（写真手順）…日課化し、生活動作の見通しを作る。</li>
+            </ul>
+            <h3>5. 家庭連携</h3>
+            <ul>
+              <li>家庭でも同じ写真手順（片付け・着替え等）を用い、刺激を揃える。</li>
+              <li>「できたら次へ」の流れを一定にし、失敗時は手順を戻して支援量を調整する。</li>
+            </ul>
+          </div>
+          <div class="note">⚠️ これはAIによるサンプル提案です。専門家の判断と安全配慮を最優先してください。</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const tabs = Array.from(document.querySelectorAll(".tab"));
+        const panels = new Map(
+          Array.from(document.querySelectorAll('[role="tabpanel"]')).map((p) => [
+            p.getAttribute("aria-labelledby"),
+            p,
+          ]),
+        );
+
+        function selectTab(tab) {
+          for (const t of tabs) {
+            const selected = t === tab;
+            t.setAttribute("aria-selected", selected ? "true" : "false");
+            const panel = panels.get(t.id);
+            if (panel) panel.hidden = !selected;
+          }
+          tab.focus({ preventScroll: true });
+        }
+
+        for (const tab of tabs) {
+          tab.addEventListener("click", () => selectTab(tab));
+          tab.addEventListener("keydown", (e) => {
+            const i = tabs.indexOf(tab);
+            if (e.key === "ArrowRight") {
+              e.preventDefault();
+              selectTab(tabs[(i + 1) % tabs.length]);
+            }
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              selectTab(tabs[(i - 1 + tabs.length) % tabs.length]);
+            }
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
