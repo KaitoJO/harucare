@@ -1094,20 +1094,10 @@ ${handover || "（なし）"}
 }
 
 function getAnthropicUrl() {
-  if (import.meta.env.DEV) {
-    return `${window.location.origin}/anthropic-api/v1/messages`;
-  }
   return `${window.location.origin}/api/anthropic`;
 }
 
 async function requestClaudeCompletion({ system, userContent, max_tokens = 8192 }) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error(
-      "APIキーが設定されていません。.env に VITE_ANTHROPIC_API_KEY を設定してください。",
-    );
-  }
-
   const model = import.meta.env.VITE_ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
 
   const body = {
@@ -1121,7 +1111,6 @@ async function requestClaudeCompletion({ system, userContent, max_tokens = 8192 
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify(body),
