@@ -65,6 +65,76 @@ const SYSTEM_PROMPT = `あなたは10年以上の経験を持つサービス管�
 - 学習障害（LD）：得意な認知ルートの特定・苦手領域の代替手段・自己理解の促進・二次障害（自己肯定感低下）予防
 - 医療的ケア児：医療連携の優先・体調による活動調整・家族の負担軽減・きょうだい児への配慮
 
+# NISE準拠 3軸分類（つまずき・支援の整理軸／必ずこの3軸で考えること）
+国立特別支援教育総合研究所（発達障害教育推進センター）が示す、子どものつまずきを整理する3つの観点。
+個別の指導計画作成では、必ず以下の3軸で課題を切り分け、それぞれに対する支援を記述すること。
+
+- **学習面：** 読み・書き・計算・記憶・理解・概念形成・教科学習の困難
+  支援例：得意な認知ルート（視覚/聴覚/触覚）の特定・代替手段の提示・スモールステップ化・繰り返し
+- **行動面：** 多動・衝動性・注意持続・切り替え・自己制御・パニック・癇癪
+  支援例：構造化・予告・選択肢提示・短時間集中・即時フィードバック・クールダウン環境
+- **社会面：** 対人関係・集団参加・コミュニケーション・感情理解・場に応じた行動
+  支援例：ソーシャルストーリー・小集団から段階導入・役割付与・モデリング・SST
+
+【NISE準拠の根拠記述パターン】
+活動・支援の根拠を書くとき、必ず「3軸のうちどの面の課題に対する支援か」を明示すること。
+例：「視覚スケジュール提示（理由：本児はASDで【行動面】の切り替え困難があり、視覚優位性を活用した予告で見通しを持たせることがNISEの推奨アプローチ）」
+
+# NISE準拠 合理的配慮の3カテゴリ（インクルDB 590事例の整理軸）
+NISEのインクルーシブ教育システム構築支援DBで、すべての合理的配慮事例は以下の3区分で整理されている。
+本児への支援を計画する際、各支援が以下のどのカテゴリに属するかを意識すること。
+
+- **① 教育内容・教育方法：** 学習内容の調整、指導方法、評価方法、教材・教具
+- **② 支援体制：** 専門家との連携、関係機関の連携、保護者支援、職員配置
+- **③ 施設・設備：** 物理的環境調整、感覚刺激の調整、安全確保
+
+# 障害種別 × 3軸 つまずきパターン参考表（NISE準拠）
+
+【自閉スペクトラム症】
+- 学習面：抽象概念の理解困難・指示の般化困難・興味偏在による未学習領域
+- 行動面：予定変更不耐性・感覚過敏（聴覚/視覚/触覚）・常同行動・パニック
+- 社会面：対人距離感の調整困難・暗黙ルール理解困難・共同注意の弱さ
+
+【ADHD】
+- 学習面：注意持続困難による単純ミス・ワーキングメモリ負荷課題でのつまずき・整理整頓
+- 行動面：多動・衝動性・離席・順番待ち困難・忘れ物
+- 社会面：会話割り込み・ルール逸脱（悪意なし）・不用意発言・対人摩擦
+
+【発達遅滞／知的障害】
+- 学習面：理解速度・抽象概念・読み書き計算の系統的困難
+- 行動面：自己コントロールの未発達・要求伝達手段の限定（クレーン現象等）
+- 社会面：年齢相応の対人スキル獲得遅延・受け身的参加
+
+【ダウン症】
+- 学習面：短期記憶課題・運動性発語の困難・抽象思考
+- 行動面：頑固さ・気分の波・健康関連活動制限（心疾患/呼吸器配慮）
+- 社会面：強み（社会性・模倣力）あり一方、年齢上昇で同年齢から離れる傾向
+
+【脳性麻痺】
+- 学習面：身体動作を伴う課題でのつまずき・疲労による持続困難
+- 行動面：身体的制約由来のフラストレーション・装具不適応
+- 社会面：移動制約による社会経験不足・自尊感情への影響
+
+【重症心身障害】
+- 学習面：表出手段限定による評価困難・覚醒水準の変動
+- 行動面：てんかん発作・呼吸/嚥下リスク・体調変動
+- 社会面：コミュニケーションサインの読み取り依存・関係性は深い
+
+【言語障害】
+- 学習面：読み書き派生課題・受容/表出言語のアンバランス
+- 行動面：伝達不全による回避・癇癪
+- 社会面：会話継続困難・からかい被害リスク
+
+【学習障害（LD）】
+- 学習面：特定領域の顕著な困難（読字/書字/計算）・他領域は年齢相応
+- 行動面：学習場面での回避・離席・自己肯定感低下
+- 社会面：「怠け」と誤解される二次的対人摩擦
+
+【医療的ケア児】
+- 学習面：体調変動による参加機会不安定・経管栄養等で時間配分制約
+- 行動面：医療デバイス起因の制限・きょうだい児との関係
+- 社会面：医療従事者依存と家族負担・施設選択の限定
+
 # 必須の出力ルール（厳守）
 
 各活動・各目標・各支援内容について、必ず**「理由：」または「（理由：〜）」**という形式で根拠を併記すること。
@@ -104,6 +174,8 @@ const REFERENCE_CASE = `【参考：実際の支援事例（発達遅滞・5歳�
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 const SAVED_PROGRAMS_STORAGE_KEY = "harucare:saved-programs:v1";
 const SUPPORT_RECORDS_STORAGE_KEY = "harucare:support-records:v1";
+const SUPPORT_DIARY_SAVED_STORAGE_KEY = "harucare:support-diary-saved:v1";
+const PARENT_CONTACT_SAVED_STORAGE_KEY = "harucare:parent-contact-saved:v1";
 const PLAN_FEEDBACK_STORAGE_KEY = "harucare:plan-feedback:v1";
 /** 支援計画の AI 原文と編集後の保存先（{ original, edited, childName, date } の配列） */
 const PROGRAM_EDIT_FEEDBACK_STORAGE_KEY = "harucare:feedback";
@@ -186,6 +258,62 @@ function persistSupportRecords(records) {
     localStorage.setItem(SUPPORT_RECORDS_STORAGE_KEY, JSON.stringify(records));
   } catch {
     // localStorage が使えない/容量超過でもアプリ自体は動かす
+  }
+}
+
+function loadSavedSupportDiaries() {
+  try {
+    const raw = localStorage.getItem(SUPPORT_DIARY_SAVED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p) =>
+        p &&
+        typeof p === "object" &&
+        typeof p.id === "string" &&
+        typeof p.childName === "string" &&
+        typeof p.createdAt === "string" &&
+        typeof p.programText === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedSupportDiaries(items) {
+  try {
+    localStorage.setItem(SUPPORT_DIARY_SAVED_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadSavedParentContacts() {
+  try {
+    const raw = localStorage.getItem(PARENT_CONTACT_SAVED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p) =>
+        p &&
+        typeof p === "object" &&
+        typeof p.id === "string" &&
+        typeof p.childName === "string" &&
+        typeof p.createdAt === "string" &&
+        typeof p.programText === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedParentContacts(items) {
+  try {
+    localStorage.setItem(PARENT_CONTACT_SAVED_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    /* ignore */
   }
 }
 
@@ -896,6 +1024,75 @@ ${child.disability}の発達原理と本児の課題を踏まえた方針にす�
 - 根拠の薄い項目（「〜のため」だけで終わる）は出力しないこと${extra}`;
 }
 
+const SUPPORT_DIARY_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの支援記録の推敲を支援するアシスタントです。
+入力は支援員の口語メモであることがあります。事実と観察、気になった点を整理し、チーム内・記録として読みやすいMarkdownの支援日誌本文のみを出力してください。
+前置き・謝罪・「ご不明な点は」のような締めは不要です。`;
+const PARENT_CONTACT_AI_SYSTEM = `あなたは保護者向け連絡文を整えるアシスタントです。
+否定や評価をくじかず、温かく丁寧な敬語で信頼感のあるトーンにしてください。
+Markdownの連絡帳本文のみを出力し、前置きや謝罪は書かないでください。`;
+
+function buildChildContextForAiLogs(child) {
+  return `【利用児の基本情報】
+お名前：${child.name}
+年齢：${child.age}
+障害種別：${child.disability}
+重症度：${child.severity}
+運動・身体能力：${child.motorLevel}
+コミュニケーション：${child.communicationLevel}
+社会性：${child.socialLevel}
+現在の主な課題：${child.currentIssues?.trim() || "（未入力）"}
+半年後の目標：${child.goals?.trim() || "（未入力）"}
+備考：${child.notes?.trim() || "（未入力）"}`;
+}
+
+function buildSupportDiaryUserPrompt(child, inputs) {
+  const dateLabel = new Date().toLocaleDateString("ja-JP");
+  const activity = String(inputs.activity ?? "").trim();
+  const appearance = String(inputs.appearance ?? "").trim();
+  const concerns = String(inputs.concerns ?? "").trim();
+  return `${buildChildContextForAiLogs(child)}
+
+記録日：${dateLabel}
+
+【支援員からの入力メモ】
+・今日の活動：
+${activity || "（なし）"}
+・本人の様子：
+${appearance || "（なし）"}
+・気になった点：
+${concerns || "（なし）"}
+
+【依頼】
+上記をもとに、支援日誌としてMarkdownで整形してください。
+・見出しは ## を用い、活動内容／様子／気になった点・フォロー方針が伝わる構成にすること。
+・観察できた事実と支援員の配慮がわかるよう書くこと。入力がない項目は無理に作らず省略してよい。
+・個人情報は最小限に留めること。`;
+}
+
+function buildParentContactUserPrompt(child, inputs) {
+  const dateLabel = new Date().toLocaleDateString("ja-JP");
+  const enjoyed = String(inputs.enjoyed ?? "").trim();
+  const effort = String(inputs.effort ?? "").trim();
+  const handover = String(inputs.handover ?? "").trim();
+  return `${buildChildContextForAiLogs(child)}
+
+記録日：${dateLabel}
+
+【支援員からの入力メモ】
+・今日楽しめたこと：
+${enjoyed || "（なし）"}
+・頑張ったこと：
+${effort || "（なし）"}
+・家庭への申し送り：
+${handover || "（なし）"}
+
+【依頼】
+保護者へお渡しする連絡帳として、温かい文体でMarkdownにまとめてください。
+・見出しは ## で簡潔に。
+・できたことを認めつつ、家庭でのフォローをお願いする際は押しつけがましくない表現にすること。
+・入力がない項目は省略してよい。`;
+}
+
 function getAnthropicUrl() {
   if (import.meta.env.DEV) {
     return `${window.location.origin}/anthropic-api/v1/messages`;
@@ -903,7 +1100,7 @@ function getAnthropicUrl() {
   return `${window.location.origin}/api/anthropic`;
 }
 
-async function requestProgramFromClaude(child, extraPlanPrompt = "") {
+async function requestClaudeCompletion({ system, userContent, max_tokens = 8192 }) {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(
@@ -912,12 +1109,11 @@ async function requestProgramFromClaude(child, extraPlanPrompt = "") {
   }
 
   const model = import.meta.env.VITE_ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
-  const userContent = `${REFERENCE_CASE}\n\n${buildUserPrompt(child, extraPlanPrompt)}`;
 
   const body = {
     model,
-    max_tokens: 8192,
-    system: SYSTEM_PROMPT,
+    max_tokens,
+    system,
     messages: [{ role: "user", content: userContent }],
   };
 
@@ -953,6 +1149,31 @@ async function requestProgramFromClaude(child, extraPlanPrompt = "") {
   return text;
 }
 
+async function requestProgramFromClaude(child, extraPlanPrompt = "") {
+  const userContent = `${REFERENCE_CASE}\n\n${buildUserPrompt(child, extraPlanPrompt)}`;
+  return requestClaudeCompletion({
+    system: SYSTEM_PROMPT,
+    userContent,
+    max_tokens: 8192,
+  });
+}
+
+async function requestSupportDiaryFromClaude(child, inputs) {
+  return requestClaudeCompletion({
+    system: SUPPORT_DIARY_AI_SYSTEM,
+    userContent: buildSupportDiaryUserPrompt(child, inputs),
+    max_tokens: 4096,
+  });
+}
+
+async function requestParentContactFromClaude(child, inputs) {
+  return requestClaudeCompletion({
+    system: PARENT_CONTACT_AI_SYSTEM,
+    userContent: buildParentContactUserPrompt(child, inputs),
+    max_tokens: 4096,
+  });
+}
+
 export default function App() {
   const [screen, setScreen] = useState("list");
   const [children, setChildren] = useState([]);
@@ -981,6 +1202,29 @@ export default function App() {
     challenges: "",
     handover: "",
   });
+  const [detailAiTab, setDetailAiTab] = useState("support-diary");
+  const [savedSupportDiaries, setSavedSupportDiaries] = useState(() =>
+    loadSavedSupportDiaries(),
+  );
+  const [savedParentContacts, setSavedParentContacts] = useState(() =>
+    loadSavedParentContacts(),
+  );
+  const [supportDiaryForm, setSupportDiaryForm] = useState({
+    activity: "",
+    appearance: "",
+    concerns: "",
+  });
+  const [supportDiaryOutput, setSupportDiaryOutput] = useState("");
+  const [supportDiaryGeneratedAt, setSupportDiaryGeneratedAt] = useState(null);
+  const [supportDiaryAiLoading, setSupportDiaryAiLoading] = useState(false);
+  const [parentContactForm, setParentContactForm] = useState({
+    enjoyed: "",
+    effort: "",
+    handover: "",
+  });
+  const [parentContactOutput, setParentContactOutput] = useState("");
+  const [parentContactGeneratedAt, setParentContactGeneratedAt] = useState(null);
+  const [parentContactAiLoading, setParentContactAiLoading] = useState(false);
   const [listSearch, setListSearch] = useState("");
   const [listFilter, setListFilter] = useState("all");
   /** 支援計画生成時に API へ渡す追加プロンプト（詳細画面） */
@@ -1008,6 +1252,25 @@ export default function App() {
   useEffect(() => {
     persistSupportRecords(supportRecords);
   }, [supportRecords]);
+
+  useEffect(() => {
+    persistSavedSupportDiaries(savedSupportDiaries);
+  }, [savedSupportDiaries]);
+
+  useEffect(() => {
+    persistSavedParentContacts(savedParentContacts);
+  }, [savedParentContacts]);
+
+  useEffect(() => {
+    if (!selectedChild?.id) return;
+    setSupportDiaryForm({ activity: "", appearance: "", concerns: "" });
+    setSupportDiaryOutput("");
+    setSupportDiaryGeneratedAt(null);
+    setParentContactForm({ enjoyed: "", effort: "", handover: "" });
+    setParentContactOutput("");
+    setParentContactGeneratedAt(null);
+    setError(null);
+  }, [selectedChild?.id]);
 
   useEffect(() => {
     persistPlanFeedbacks(planFeedbacks);
@@ -1062,6 +1325,22 @@ export default function App() {
       .slice()
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }, [supportRecords, selectedChild]);
+
+  const selectedSavedSupportDiaries = useMemo(() => {
+    if (!selectedChild?.name) return [];
+    return savedSupportDiaries
+      .filter((p) => p.childName === selectedChild.name)
+      .slice()
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  }, [savedSupportDiaries, selectedChild]);
+
+  const selectedSavedParentContacts = useMemo(() => {
+    if (!selectedChild?.name) return [];
+    return savedParentContacts
+      .filter((p) => p.childName === selectedChild.name)
+      .slice()
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  }, [savedParentContacts, selectedChild]);
 
   const currentGenPlanFeedback = useMemo(() => {
     const ck = planFeedbackChildKey(selectedChild);
@@ -1151,6 +1430,16 @@ export default function App() {
             r.childName === prevName ? { ...r, childName: nextName } : r,
           ),
         );
+        setSavedSupportDiaries((prev) =>
+          prev.map((p) =>
+            p.childName === prevName ? { ...p, childName: nextName } : p,
+          ),
+        );
+        setSavedParentContacts((prev) =>
+          prev.map((p) =>
+            p.childName === prevName ? { ...p, childName: nextName } : p,
+          ),
+        );
         setSelectedSavedChildName((n) => (n === prevName ? nextName : n));
         setSelectedSaved((p) =>
           p && p.childName === prevName ? { ...p, childName: nextName } : p,
@@ -1228,6 +1517,106 @@ export default function App() {
       programText: generatedProgram,
     };
     setSavedPrograms((prev) => [entry, ...prev]);
+  };
+
+  const handleGenerateSupportDiary = async () => {
+    if (!selectedChild) return;
+    const has =
+      supportDiaryForm.activity.trim() ||
+      supportDiaryForm.appearance.trim() ||
+      supportDiaryForm.concerns.trim();
+    if (!has) {
+      setError(
+        "今日の活動・本人の様子・気になった点のいずれかに入力してください。",
+      );
+      return;
+    }
+    setError(null);
+    setSupportDiaryAiLoading(true);
+    setSupportDiaryOutput("");
+    setSupportDiaryGeneratedAt(null);
+    try {
+      const text = await requestSupportDiaryFromClaude(
+        selectedChild,
+        supportDiaryForm,
+      );
+      setSupportDiaryOutput(text);
+      setSupportDiaryGeneratedAt(new Date().toISOString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSupportDiaryAiLoading(false);
+    }
+  };
+
+  const handleSaveSupportDiary = () => {
+    if (!selectedChild) return;
+    if (!supportDiaryOutput.trim()) return;
+    const createdAt = supportDiaryGeneratedAt || new Date().toISOString();
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childName: selectedChild.name,
+      childId: selectedChild.id ?? null,
+      createdAt,
+      createdAtLabel: formatJaDateTime(createdAt),
+      programText: supportDiaryOutput.trim(),
+      sourceInputs: {
+        activity: supportDiaryForm.activity.trim(),
+        appearance: supportDiaryForm.appearance.trim(),
+        concerns: supportDiaryForm.concerns.trim(),
+      },
+    };
+    setSavedSupportDiaries((prev) => [entry, ...prev]);
+  };
+
+  const handleGenerateParentContact = async () => {
+    if (!selectedChild) return;
+    const has =
+      parentContactForm.enjoyed.trim() ||
+      parentContactForm.effort.trim() ||
+      parentContactForm.handover.trim();
+    if (!has) {
+      setError(
+        "今日楽しめたこと・頑張ったこと・家庭への申し送りのいずれかに入力してください。",
+      );
+      return;
+    }
+    setError(null);
+    setParentContactAiLoading(true);
+    setParentContactOutput("");
+    setParentContactGeneratedAt(null);
+    try {
+      const text = await requestParentContactFromClaude(
+        selectedChild,
+        parentContactForm,
+      );
+      setParentContactOutput(text);
+      setParentContactGeneratedAt(new Date().toISOString());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setParentContactAiLoading(false);
+    }
+  };
+
+  const handleSaveParentContact = () => {
+    if (!selectedChild) return;
+    if (!parentContactOutput.trim()) return;
+    const createdAt = parentContactGeneratedAt || new Date().toISOString();
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childName: selectedChild.name,
+      childId: selectedChild.id ?? null,
+      createdAt,
+      createdAtLabel: formatJaDateTime(createdAt),
+      programText: parentContactOutput.trim(),
+      sourceInputs: {
+        enjoyed: parentContactForm.enjoyed.trim(),
+        effort: parentContactForm.effort.trim(),
+        handover: parentContactForm.handover.trim(),
+      },
+    };
+    setSavedParentContacts((prev) => [entry, ...prev]);
   };
 
   const handleExportProgramPdf = useCallback(async () => {
@@ -2047,7 +2436,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       const ok = window.confirm(
-                        `${selectedChild.name} を削除しますか？\n（保存済みプログラム・支援記録も一覧から除外されます）`,
+                        `${selectedChild.name} を削除しますか？\n（保存済みプログラム・支援記録・AI支援日誌・保護者連絡帳も一覧から除外されます）`,
                       );
                       if (!ok) return;
                       const nameToDelete = selectedChild.name;
@@ -2058,6 +2447,12 @@ export default function App() {
                       );
                       setSupportRecords((prev) =>
                         prev.filter((r) => r.childName !== nameToDelete),
+                      );
+                      setSavedSupportDiaries((prev) =>
+                        prev.filter((p) => p.childName !== nameToDelete),
+                      );
+                      setSavedParentContacts((prev) =>
+                        prev.filter((p) => p.childName !== nameToDelete),
                       );
                       setSelectedSavedChildName((n) =>
                         n === nameToDelete ? null : n,
@@ -2163,6 +2558,317 @@ export default function App() {
             )}
 
             <div style={s.card}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#2d5a3d", marginBottom: 6 }}>
+                AI 記録・連絡
+              </div>
+              <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 12, lineHeight: 1.5 }}>
+                下記の基本情報（診断・年齢・課題など）は AI に自動で渡されます。
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <button
+                  type="button"
+                  onClick={() => setDetailAiTab("support-diary")}
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    border:
+                      detailAiTab === "support-diary"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #c8e0cc",
+                    background: detailAiTab === "support-diary" ? "#2d5a3d" : "#fafcfa",
+                    color: detailAiTab === "support-diary" ? "#fff" : "#2d5a3d",
+                  }}
+                >
+                  支援記録
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailAiTab("parent-contact")}
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    border:
+                      detailAiTab === "parent-contact"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #c8e0cc",
+                    background:
+                      detailAiTab === "parent-contact" ? "#2d5a3d" : "#fafcfa",
+                    color:
+                      detailAiTab === "parent-contact" ? "#fff" : "#2d5a3d",
+                  }}
+                >
+                  保護者連絡帳
+                </button>
+              </div>
+
+              {detailAiTab === "support-diary" && (
+                <>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>今日の活動</label>
+                    <textarea
+                      value={supportDiaryForm.activity}
+                      onChange={(e) =>
+                        setSupportDiaryForm((f) => ({
+                          ...f,
+                          activity: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="例：フリー遊び、グループ工作、散歩 など"
+                      style={s.textarea}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>本人の様子</label>
+                    <textarea
+                      value={supportDiaryForm.appearance}
+                      onChange={(e) =>
+                        setSupportDiaryForm((f) => ({
+                          ...f,
+                          appearance: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="例：終始落ち着いて過ごせた、同伴時は手をつないで歩けた など"
+                      style={s.textarea}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>気になった点（音声入力可）</label>
+                    <VoiceAppendTextarea
+                      value={supportDiaryForm.concerns}
+                      onValueChange={(next) =>
+                        setSupportDiaryForm((f) => ({ ...f, concerns: next }))
+                      }
+                      rows={3}
+                      placeholder="例：急な予定変更時にしばらく動けなかった など"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateSupportDiary()}
+                    disabled={supportDiaryAiLoading}
+                    style={{
+                      ...s.btn,
+                      marginBottom: 12,
+                      opacity: supportDiaryAiLoading ? 0.65 : 1,
+                      cursor: supportDiaryAiLoading ? "wait" : "pointer",
+                    }}
+                  >
+                    {supportDiaryAiLoading ? "支援日誌を整形中…" : "AI で支援日誌に整形"}
+                  </button>
+                  {supportDiaryOutput.trim() ? (
+                    <>
+                      <div
+                        style={{
+                          ...s.card,
+                          padding: 14,
+                          marginBottom: 12,
+                          boxShadow: "none",
+                          border: "1px solid #e0eae0",
+                        }}
+                      >
+                        <label style={s.label}>整形結果</label>
+                        <ProgramMarkdown text={supportDiaryOutput} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveSupportDiary}
+                        style={{
+                          ...s.btnGold,
+                          marginBottom: 16,
+                        }}
+                      >
+                        この支援日誌を保存
+                      </button>
+                    </>
+                  ) : null}
+
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#7a8a7a",
+                      letterSpacing: "0.08em",
+                      marginBottom: 8,
+                    }}
+                  >
+                    保存済み（このお子さま）
+                  </div>
+                  {selectedSavedSupportDiaries.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
+                      まだありません。整形後に「この支援日誌を保存」から保存できます。
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {selectedSavedSupportDiaries.map((p) => (
+                        <div
+                          key={p.id}
+                          style={{
+                            border: "1px solid #e0eae0",
+                            borderRadius: 12,
+                            padding: "12px 12px",
+                            background: "#fafcfa",
+                            maxHeight: 280,
+                            overflow: "auto",
+                          }}
+                        >
+                          <div
+                            style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                          >
+                            {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                          </div>
+                          <ProgramMarkdown text={p.programText} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {detailAiTab === "parent-contact" && (
+                <>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>今日楽しめたこと</label>
+                    <textarea
+                      value={parentContactForm.enjoyed}
+                      onChange={(e) =>
+                        setParentContactForm((f) => ({
+                          ...f,
+                          enjoyed: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="例：砂場で仲間と長く遊べた など"
+                      style={s.textarea}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>頑張ったこと</label>
+                    <textarea
+                      value={parentContactForm.effort}
+                      onChange={(e) =>
+                        setParentContactForm((f) => ({
+                          ...f,
+                          effort: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="例：輪番で待てた、片付けに参加できた など"
+                      style={s.textarea}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>家庭への申し送り</label>
+                    <textarea
+                      value={parentContactForm.handover}
+                      onChange={(e) =>
+                        setParentContactForm((f) => ({
+                          ...f,
+                          handover: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="例：睡眠不足気味だったので午後は様子見ました、など"
+                      style={s.textarea}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateParentContact()}
+                    disabled={parentContactAiLoading}
+                    style={{
+                      ...s.btn,
+                      marginBottom: 12,
+                      opacity: parentContactAiLoading ? 0.65 : 1,
+                      cursor: parentContactAiLoading ? "wait" : "pointer",
+                    }}
+                  >
+                    {parentContactAiLoading
+                      ? "連絡文を生成中…"
+                      : "AI で連絡帳を生成"}
+                  </button>
+                  {parentContactOutput.trim() ? (
+                    <>
+                      <div
+                        style={{
+                          ...s.card,
+                          padding: 14,
+                          marginBottom: 12,
+                          boxShadow: "none",
+                          border: "1px solid #e0eae0",
+                        }}
+                      >
+                        <label style={s.label}>生成結果</label>
+                        <ProgramMarkdown text={parentContactOutput} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveParentContact}
+                        style={{
+                          ...s.btnGold,
+                          marginBottom: 16,
+                        }}
+                      >
+                        この連絡帳を保存
+                      </button>
+                    </>
+                  ) : null}
+
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#7a8a7a",
+                      letterSpacing: "0.08em",
+                      marginBottom: 8,
+                    }}
+                  >
+                    保存済み（このお子さま）
+                  </div>
+                  {selectedSavedParentContacts.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
+                      まだありません。生成後に「この連絡帳を保存」から保存できます。
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {selectedSavedParentContacts.map((p) => (
+                        <div
+                          key={p.id}
+                          style={{
+                            border: "1px solid #e0eae0",
+                            borderRadius: 12,
+                            padding: "12px 12px",
+                            background: "#fafcfa",
+                            maxHeight: 280,
+                            overflow: "auto",
+                          }}
+                        >
+                          <div
+                            style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                          >
+                            {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                          </div>
+                          <ProgramMarkdown text={p.programText} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div style={s.card}>
               <div
                 style={{
                   display: "flex",
@@ -2173,7 +2879,7 @@ export default function App() {
                 }}
               >
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#2d5a3d" }}>
-                  支援記録
+                  簡易記録（手入力）
                 </div>
                 <button
                   type="button"
@@ -2199,13 +2905,13 @@ export default function App() {
                     fontFamily: "inherit",
                   }}
                 >
-                  支援記録を追加
+                  記録を追加
                 </button>
               </div>
 
               {selectedSupportRecords.length === 0 ? (
                 <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
-                  まだ記録がありません。右上の「支援記録を追加」から追加できます。
+                  まだ記録がありません。右上の「記録を追加」から追加できます。
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2291,7 +2997,7 @@ export default function App() {
                   marginBottom: 4,
                 }}
               >
-                支援記録を追加
+                簡易記録を追加
               </div>
               <div style={{ fontSize: 12, color: "#7a8a7a" }}>
                 {selectedChild.name}
