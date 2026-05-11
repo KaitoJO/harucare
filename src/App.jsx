@@ -246,6 +246,99 @@ function diaryOneLineActivity(d) {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
+function formatJaMonthDayTime(iso) {
+  try {
+    return new Date(iso).toLocaleString("ja-JP", {
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * 保存済み一覧・履歴用。ref に元オブジェクト、type / title はカード表示用。
+ */
+function buildUnifiedHistoryRows(childName, programs, diaries, contacts, records) {
+  const cn = childName || "";
+  const rows = [];
+  for (const p of programs) {
+    if ((p.childName || "") !== cn) continue;
+    const title =
+      typeof p.title === "string" && p.title.trim()
+        ? p.title.trim()
+        : "個別支援計画書";
+    rows.push({
+      historyKey: `support_plan:${p.id}`,
+      type: "support_plan",
+      title,
+      icon: "📋",
+      createdAt: p.createdAt,
+      createdAtLabel: p.createdAtLabel || "",
+      ref: p,
+    });
+  }
+  for (const d of diaries) {
+    if ((d.childName || "") !== cn) continue;
+    const title =
+      typeof d.title === "string" && d.title.trim()
+        ? d.title.trim()
+        : "支援記録";
+    rows.push({
+      historyKey: `support_diary:${d.id}`,
+      type: "support_diary",
+      title,
+      icon: "📔",
+      createdAt: d.createdAt,
+      createdAtLabel: d.createdAtLabel || "",
+      ref: d,
+    });
+  }
+  for (const c of contacts) {
+    if ((c.childName || "") !== cn) continue;
+    const title =
+      typeof c.title === "string" && c.title.trim()
+        ? c.title.trim()
+        : "保護者連絡帳";
+    rows.push({
+      historyKey: `parent_contact:${c.id}`,
+      type: "parent_contact",
+      title,
+      icon: "📨",
+      createdAt: c.createdAt,
+      createdAtLabel: c.createdAtLabel || "",
+      ref: c,
+    });
+  }
+  for (const r of records) {
+    if ((r.childName || "") !== cn) continue;
+    const createdAt = r.createdAt || `${r.date}T12:00:00`;
+    const title =
+      typeof r.title === "string" && r.title.trim()
+        ? r.title.trim()
+        : "簡易支援記録";
+    rows.push({
+      historyKey: `support_record:${r.id}`,
+      type: "support_record",
+      title,
+      icon: "📝",
+      createdAt,
+      createdAtLabel: r.createdAt
+        ? formatJaDateTime(r.createdAt)
+        : formatJaDate(r.date),
+      ref: r,
+    });
+  }
+  rows.sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+  );
+  return rows;
+}
+
 function getLatestPlanFeedbackForProgram(feedbacks, childId, programText) {
   const cid = String(childId);
   for (let i = feedbacks.length - 1; i >= 0; i -= 1) {
@@ -905,7 +998,7 @@ ${child.disability}の発達原理と本児の課題を踏まえた方針にす�
 }
 
 const SUPPORT_DIARY_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの支援記録の推敲を支援するアシスタントです。
-入力は支援員の口語メモであることがあります。事実と観察、気になった点を整理し、チーム内・記録として読みやすいMarkdownの支援日誌本文のみを出力してください。
+入力は支援員の口語メモであることがあります。事実と観察、気になった点を整理し、チーム内・記録として読みやすいMarkdownの支援記録本文のみを出力してください。
 前置き・謝罪・「ご不明な点は」のような締めは不要です。`;
 const PARENT_CONTACT_AI_SYSTEM = `あなたは保護者向け連絡文を整えるアシスタントです。
 否定や評価をくじかず、温かく丁寧な敬語で信頼感のあるトーンにしてください。
@@ -943,7 +1036,7 @@ ${appearance || "（なし）"}
 ${concerns || "（なし）"}
 
 【依頼】
-上記をもとに、支援日誌としてMarkdownで整形してください。
+上記をもとに、支援記録としてMarkdownで整形してください。
 ・見出しは ## を用い、活動内容／様子／気になった点・フォロー方針が伝わる構成にすること。
 ・観察できた事実と支援員の配慮がわかるよう書くこと。入力がない項目は無理に作らず省略してよい。
 ・個人情報は最小限に留めること。`;
@@ -1067,6 +1160,8 @@ export default function App() {
   const [savedPrograms, setSavedPrograms] = useState([]);
   const [selectedSavedChildName, setSelectedSavedChildName] = useState(null);
   const [selectedSaved, setSelectedSaved] = useState(null);
+  /** 履歴から開く計画書以外（支援記録・連絡帳・簡易記録） */
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
   const [printPayload, setPrintPayload] = useState(null);
   const [printRequested, setPrintRequested] = useState(false);
   const [supportRecords, setSupportRecords] = useState([]);
@@ -1077,7 +1172,7 @@ export default function App() {
     challenges: "",
     handover: "",
   });
-  /** 子ども詳細: 個別支援計画書 | 支援日誌 | 保護者連絡帳 */
+  /** 子ども詳細: 個別支援計画書 | 支援記録 | 保護者連絡帳 */
   const [detailDocTab, setDetailDocTab] = useState("plan");
   const [detailPlanListExpanded, setDetailPlanListExpanded] = useState(false);
   const [detailDiaryListExpanded, setDetailDiaryListExpanded] = useState(false);
@@ -1156,6 +1251,7 @@ export default function App() {
         setPlanFeedbacks([]);
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
+        setSelectedHistoryEntry(null);
         setScreen("list");
         setEditingChildId(null);
         setEditingOriginalName(null);
@@ -1243,32 +1339,51 @@ export default function App() {
     return () => clearTimeout(t);
   }, [printRequested]);
 
-  const savedCount = useMemo(() => savedPrograms.length, [savedPrograms.length]);
+  const savedCount = useMemo(
+    () =>
+      savedPrograms.length +
+      savedSupportDiaries.length +
+      savedParentContacts.length +
+      supportRecords.length,
+    [
+      savedPrograms.length,
+      savedSupportDiaries.length,
+      savedParentContacts.length,
+      supportRecords.length,
+    ],
+  );
 
   const savedGroups = useMemo(() => {
-    const groups = new Map();
-    for (const p of savedPrograms) {
-      const name = p.childName || "（名前なし）";
-      if (!groups.has(name)) groups.set(name, []);
-      groups.get(name).push(p);
-    }
+    const nameSet = new Set();
+    for (const p of savedPrograms) nameSet.add(p.childName || "（名前なし）");
+    for (const d of savedSupportDiaries) nameSet.add(d.childName || "（名前なし）");
+    for (const c of savedParentContacts) nameSet.add(c.childName || "（名前なし）");
+    for (const r of supportRecords) nameSet.add(r.childName || "（名前なし）");
 
-    const result = Array.from(groups.entries()).map(([childName, items]) => {
-      const sorted = [...items].sort((a, b) =>
-        String(b.createdAt).localeCompare(String(a.createdAt)),
+    const result = Array.from(nameSet).map((childName) => {
+      const items = buildUnifiedHistoryRows(
+        childName,
+        savedPrograms,
+        savedSupportDiaries,
+        savedParentContacts,
+        supportRecords,
       );
       return {
         childName,
-        items: sorted,
-        count: sorted.length,
-        latestAt: sorted[0]?.createdAt ?? null,
+        items,
+        count: items.length,
+        latestAt: items[0]?.createdAt ?? null,
       };
     });
 
-    // 最近保存されたグループ順
     result.sort((a, b) => String(b.latestAt).localeCompare(String(a.latestAt)));
     return result;
-  }, [savedPrograms]);
+  }, [
+    savedPrograms,
+    savedSupportDiaries,
+    savedParentContacts,
+    supportRecords,
+  ]);
 
   const selectedChildHistory = useMemo(() => {
     if (!selectedSavedChildName) return [];
@@ -1560,6 +1675,7 @@ export default function App() {
       createdAt,
       createdAtLabel: formatJaDateTime(createdAt),
       programText: generatedProgram,
+      title: "個別支援計画書",
     };
     try {
       await workspaceDb.insertSavedProgram(supabase, session.user.id, entry);
@@ -1613,6 +1729,7 @@ export default function App() {
       createdAt,
       createdAtLabel: formatJaDateTime(createdAt),
       programText: supportDiaryOutput.trim(),
+      title: "支援記録",
       sourceInputs: {
         activity: supportDiaryForm.activity.trim(),
         appearance: supportDiaryForm.appearance.trim(),
@@ -1670,6 +1787,7 @@ export default function App() {
       createdAt,
       createdAtLabel: formatJaDateTime(createdAt),
       programText: parentContactOutput.trim(),
+      title: "保護者連絡帳",
       sourceInputs: {
         enjoyed: parentContactForm.enjoyed.trim(),
         effort: parentContactForm.effort.trim(),
@@ -1761,7 +1879,13 @@ export default function App() {
       return;
     }
     if (screen === "savedChildHistory") {
+      setSelectedHistoryEntry(null);
       setScreen("savedList");
+      return;
+    }
+    if (screen === "savedHistoryDetail") {
+      setSelectedHistoryEntry(null);
+      setScreen("savedChildHistory");
       return;
     }
     if (screen === "savedProgram") {
@@ -2029,6 +2153,7 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setSavedListExpanded(false);
+                  setSelectedHistoryEntry(null);
                   setScreen("savedList");
                 }}
                 style={{
@@ -2619,7 +2744,7 @@ export default function App() {
                     type="button"
                     onClick={async () => {
                       const ok = window.confirm(
-                        `${selectedChild.name} を削除しますか？\n（保存済みプログラム・支援記録・AI支援日誌・保護者連絡帳も一覧から除外されます）`,
+                        `${selectedChild.name} を削除しますか？\n（保存済みプログラム・簡易支援記録・支援記録・保護者連絡帳も一覧から除外されます）`,
                       );
                       if (!ok) return;
                       const nameToDelete = selectedChild.name;
@@ -2811,7 +2936,7 @@ export default function App() {
                     color: detailDocTab === "diary" ? "#fff" : "#2d5a3d",
                   }}
                 >
-                  支援日誌
+                  支援記録
                 </button>
                 <button
                   type="button"
@@ -3010,7 +3135,7 @@ export default function App() {
                       cursor: supportDiaryAiLoading ? "wait" : "pointer",
                     }}
                   >
-                    {supportDiaryAiLoading ? "支援日誌を整形中…" : "AI で支援日誌に整形"}
+                    {supportDiaryAiLoading ? "支援記録を整形中…" : "AI で支援記録に整形"}
                   </button>
                   {supportDiaryOutput.trim() ? (
                     <>
@@ -3034,7 +3159,7 @@ export default function App() {
                           marginBottom: 16,
                         }}
                       >
-                        この支援日誌を保存
+                        この支援記録を保存
                       </button>
                     </>
                   ) : null}
@@ -3052,7 +3177,7 @@ export default function App() {
                   </div>
                   {selectedSavedSupportDiaries.length === 0 ? (
                     <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
-                      まだありません。整形後に「この支援日誌を保存」から保存できます。
+                      まだありません。整形後に「この支援記録を保存」から保存できます。
                     </div>
                   ) : (
                     <>
@@ -3620,6 +3745,7 @@ export default function App() {
                   childId: selectedChild.id ?? null,
                   date,
                   createdAt,
+                  title: "簡易支援記録",
                   mood: recordForm.mood.trim(),
                   success: recordForm.success.trim(),
                   challenges: recordForm.challenges.trim(),
@@ -3995,21 +4121,23 @@ export default function App() {
                       role="button"
                       tabIndex={0}
                       style={{ ...s.card, cursor: "pointer" }}
-                      onClick={() => {
-                        setSavedHistoryExpanded(false);
-                        setSelectedSavedChildName(g.childName);
-                        setSelectedSaved(null);
-                        setScreen("savedChildHistory");
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSavedHistoryExpanded(false);
-                          setSelectedSavedChildName(g.childName);
-                          setSelectedSaved(null);
-                          setScreen("savedChildHistory");
-                        }
-                      }}
+                  onClick={() => {
+                    setSavedHistoryExpanded(false);
+                    setSelectedHistoryEntry(null);
+                    setSelectedSavedChildName(g.childName);
+                    setSelectedSaved(null);
+                    setScreen("savedChildHistory");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSavedHistoryExpanded(false);
+                      setSelectedHistoryEntry(null);
+                      setSelectedSavedChildName(g.childName);
+                      setSelectedSaved(null);
+                      setScreen("savedChildHistory");
+                    }
+                  }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div
@@ -4086,19 +4214,29 @@ export default function App() {
                 : selectedChildHistory.slice(0, 10)
               ).map((p) => (
                 <div
-                  key={p.id}
+                  key={p.historyKey}
                   role="button"
                   tabIndex={0}
                   style={{ ...s.card, cursor: "pointer" }}
                   onClick={() => {
-                    setSelectedSaved(p);
-                    setScreen("savedProgram");
+                    if (p.type === "support_plan") {
+                      setSelectedSaved(p.ref);
+                      setScreen("savedProgram");
+                      return;
+                    }
+                    setSelectedHistoryEntry({ type: p.type, ref: p.ref });
+                    setScreen("savedHistoryDetail");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setSelectedSaved(p);
-                      setScreen("savedProgram");
+                      if (p.type === "support_plan") {
+                        setSelectedSaved(p.ref);
+                        setScreen("savedProgram");
+                        return;
+                      }
+                      setSelectedHistoryEntry({ type: p.type, ref: p.ref });
+                      setScreen("savedHistoryDetail");
                     }
                   }}
                 >
@@ -4116,17 +4254,27 @@ export default function App() {
                         fontSize: 18,
                       }}
                     >
-                      🗓️
+                      {p.icon}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#2a3a2a" }}>
-                        {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#2a3a2a",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        {p.title}
                       </div>
-                      <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: "#5a6a5a", marginTop: 4 }}>
+                        {formatJaMonthDayTime(p.createdAt)}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 4 }}>
                         タップして詳細
                       </div>
                     </div>
-                    <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
+                    <div style={{ fontSize: 18, color: "#ccc", flexShrink: 0 }}>›</div>
                   </div>
                 </div>
               ))}
@@ -4149,6 +4297,89 @@ export default function App() {
           </div>
         )}
 
+        {screen === "savedHistoryDetail" && selectedHistoryEntry && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>
+                {selectedHistoryEntry.type === "support_diary" && "📔"}
+                {selectedHistoryEntry.type === "parent_contact" && "📨"}
+                {selectedHistoryEntry.type === "support_record" && "📝"}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#2a3a2a" }}>
+                {selectedHistoryEntry.ref.childName}
+              </div>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#2d5a3d",
+                  marginTop: 6,
+                }}
+              >
+                {typeof selectedHistoryEntry.ref.title === "string" &&
+                selectedHistoryEntry.ref.title.trim()
+                  ? selectedHistoryEntry.ref.title.trim()
+                  : selectedHistoryEntry.type === "support_diary"
+                    ? "支援記録"
+                    : selectedHistoryEntry.type === "parent_contact"
+                      ? "保護者連絡帳"
+                      : "簡易支援記録"}
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a7a", marginTop: 4 }}>
+                {formatJaMonthDayTime(
+                  selectedHistoryEntry.ref.createdAt ||
+                    `${selectedHistoryEntry.ref.date}T12:00:00`,
+                )}
+              </div>
+            </div>
+            {selectedHistoryEntry.type === "support_record" && (
+              <div
+                style={{
+                  ...s.card,
+                  fontSize: 13,
+                  color: "#2a3a2a",
+                  lineHeight: 1.65,
+                }}
+              >
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ ...s.label }}>記録日</div>
+                  <div>{formatJaDate(selectedHistoryEntry.ref.date)}</div>
+                </div>
+                {selectedHistoryEntry.ref.mood ? (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ ...s.label }}>今日の様子</div>
+                    <div>{selectedHistoryEntry.ref.mood}</div>
+                  </div>
+                ) : null}
+                {selectedHistoryEntry.ref.success ? (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ ...s.label }}>できたこと</div>
+                    <div>{selectedHistoryEntry.ref.success}</div>
+                  </div>
+                ) : null}
+                {selectedHistoryEntry.ref.challenges ? (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ ...s.label }}>課題</div>
+                    <div>{selectedHistoryEntry.ref.challenges}</div>
+                  </div>
+                ) : null}
+                {selectedHistoryEntry.ref.handover ? (
+                  <div>
+                    <div style={{ ...s.label }}>次回への申し送り</div>
+                    <div>{selectedHistoryEntry.ref.handover}</div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+            {(selectedHistoryEntry.type === "support_diary" ||
+              selectedHistoryEntry.type === "parent_contact") && (
+              <div style={{ ...s.card, fontSize: 13, color: "#2a3a2a" }}>
+                <ProgramMarkdown text={selectedHistoryEntry.ref.programText} />
+              </div>
+            )}
+          </div>
+        )}
+
         {screen === "savedProgram" && selectedSaved && (
           <div>
             <div style={{ marginBottom: 16 }}>
@@ -4160,9 +4391,12 @@ export default function App() {
                   marginBottom: 2,
                 }}
               >
-                {selectedSaved.childName}の保存済みプログラム
+                {selectedSaved.childName}
               </div>
-              <div style={{ fontSize: 12, color: "#7a8a7a" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#2d5a3d", marginTop: 4 }}>
+                📋 {selectedSaved.title?.trim() || "個別支援計画書"}
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a7a", marginTop: 4 }}>
                 {selectedSaved.createdAtLabel || formatJaDateTime(selectedSaved.createdAt)}
               </div>
             </div>

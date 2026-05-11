@@ -26,6 +26,7 @@ function savedProgramFromRow(r) {
     createdAt: r.created_at,
     createdAtLabel: r.created_at_label ?? "",
     programText: r.program_text,
+    title: r.title != null && String(r.title).trim() ? String(r.title).trim() : undefined,
   };
 }
 
@@ -40,6 +41,7 @@ function supportRecordFromRow(r) {
     success: r.success ?? "",
     challenges: r.challenges ?? "",
     handover: r.handover ?? "",
+    title: r.title != null && String(r.title).trim() ? String(r.title).trim() : undefined,
   };
 }
 
@@ -67,6 +69,7 @@ function diaryFromRow(r) {
     createdAtLabel: r.created_at_label ?? "",
     programText: r.program_text,
     sourceInputs: r.source_inputs ?? undefined,
+    title: r.title != null && String(r.title).trim() ? String(r.title).trim() : undefined,
   };
 }
 
