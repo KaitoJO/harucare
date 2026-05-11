@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { exportSupportPlanPdf, supportPlanPdfFilename } from "./exportSupportPlanPdf.js";
+import { getSupabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
+import * as workspaceDb from "./lib/workspaceDb.js";
+import AuthScreen from "./AuthScreen.jsx";
 
 const DISABILITY_TYPES = [
   "自閉スペクトラム症",
@@ -172,13 +175,6 @@ const REFERENCE_CASE = `【参考：実際の支援事例（発達遅滞・5歳�
 障害種別が変わっても同じ書式（活動＋理由）で出力すること。`;
 
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
-const SAVED_PROGRAMS_STORAGE_KEY = "harucare:saved-programs:v1";
-const SUPPORT_RECORDS_STORAGE_KEY = "harucare:support-records:v1";
-const SUPPORT_DIARY_SAVED_STORAGE_KEY = "harucare:support-diary-saved:v1";
-const PARENT_CONTACT_SAVED_STORAGE_KEY = "harucare:parent-contact-saved:v1";
-const PLAN_FEEDBACK_STORAGE_KEY = "harucare:plan-feedback:v1";
-/** 支援計画の AI 原文と編集後の保存先（{ original, edited, childName, date } の配列） */
-const PROGRAM_EDIT_FEEDBACK_STORAGE_KEY = "harucare:feedback";
 
 function formatJaDateTime(iso) {
   try {
@@ -204,166 +200,6 @@ function todayYyyyMmDd() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function loadSavedPrograms() {
-  try {
-    const raw = localStorage.getItem(SAVED_PROGRAMS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (p) =>
-        p &&
-        typeof p === "object" &&
-        typeof p.id === "string" &&
-        typeof p.childName === "string" &&
-        typeof p.createdAt === "string" &&
-        typeof p.programText === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function persistSavedPrograms(programs) {
-  try {
-    localStorage.setItem(SAVED_PROGRAMS_STORAGE_KEY, JSON.stringify(programs));
-  } catch {
-    // localStorage が使えない/容量超過でもアプリ自体は動かす
-  }
-}
-
-function loadSupportRecords() {
-  try {
-    const raw = localStorage.getItem(SUPPORT_RECORDS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (r) =>
-        r &&
-        typeof r === "object" &&
-        typeof r.id === "string" &&
-        typeof r.childName === "string" &&
-        typeof r.date === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function persistSupportRecords(records) {
-  try {
-    localStorage.setItem(SUPPORT_RECORDS_STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // localStorage が使えない/容量超過でもアプリ自体は動かす
-  }
-}
-
-function loadSavedSupportDiaries() {
-  try {
-    const raw = localStorage.getItem(SUPPORT_DIARY_SAVED_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (p) =>
-        p &&
-        typeof p === "object" &&
-        typeof p.id === "string" &&
-        typeof p.childName === "string" &&
-        typeof p.createdAt === "string" &&
-        typeof p.programText === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function persistSavedSupportDiaries(items) {
-  try {
-    localStorage.setItem(SUPPORT_DIARY_SAVED_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    /* ignore */
-  }
-}
-
-function loadSavedParentContacts() {
-  try {
-    const raw = localStorage.getItem(PARENT_CONTACT_SAVED_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (p) =>
-        p &&
-        typeof p === "object" &&
-        typeof p.id === "string" &&
-        typeof p.childName === "string" &&
-        typeof p.createdAt === "string" &&
-        typeof p.programText === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function persistSavedParentContacts(items) {
-  try {
-    localStorage.setItem(PARENT_CONTACT_SAVED_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    /* ignore */
-  }
-}
-
-function appendProgramEditFeedback(entry) {
-  try {
-    const raw = localStorage.getItem(PROGRAM_EDIT_FEEDBACK_STORAGE_KEY);
-    const prev = raw ? JSON.parse(raw) : [];
-    const list = Array.isArray(prev) ? prev : [];
-    list.push({
-      original: String(entry.original ?? ""),
-      edited: String(entry.edited ?? ""),
-      childName: String(entry.childName ?? ""),
-      date: String(entry.date ?? new Date().toISOString()),
-    });
-    localStorage.setItem(
-      PROGRAM_EDIT_FEEDBACK_STORAGE_KEY,
-      JSON.stringify(list),
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
-function loadPlanFeedbacks() {
-  try {
-    const raw = localStorage.getItem(PLAN_FEEDBACK_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (f) =>
-        f &&
-        typeof f === "object" &&
-        typeof f.programText === "string" &&
-        (f.rating === "up" || f.rating === "down") &&
-        typeof f.createdAt === "string" &&
-        f.childId != null &&
-        String(f.childId) !== "",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function persistPlanFeedbacks(items) {
-  try {
-    localStorage.setItem(PLAN_FEEDBACK_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    /* ignore */
-  }
 }
 
 function getLatestPlanFeedbackForProgram(feedbacks, childId, programText) {
@@ -1164,6 +1000,12 @@ async function requestParentContactFromClaude(child, inputs) {
 }
 
 export default function App() {
+  const supabase = useMemo(() => getSupabase(), []);
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [childSaveBusy, setChildSaveBusy] = useState(false);
+
   const [screen, setScreen] = useState("list");
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
@@ -1178,12 +1020,12 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [savedPrograms, setSavedPrograms] = useState(() => loadSavedPrograms());
+  const [savedPrograms, setSavedPrograms] = useState([]);
   const [selectedSavedChildName, setSelectedSavedChildName] = useState(null);
   const [selectedSaved, setSelectedSaved] = useState(null);
   const [printPayload, setPrintPayload] = useState(null);
   const [printRequested, setPrintRequested] = useState(false);
-  const [supportRecords, setSupportRecords] = useState(() => loadSupportRecords());
+  const [supportRecords, setSupportRecords] = useState([]);
   const [recordForm, setRecordForm] = useState({
     date: todayYyyyMmDd(),
     mood: "",
@@ -1192,12 +1034,8 @@ export default function App() {
     handover: "",
   });
   const [detailAiTab, setDetailAiTab] = useState("support-diary");
-  const [savedSupportDiaries, setSavedSupportDiaries] = useState(() =>
-    loadSavedSupportDiaries(),
-  );
-  const [savedParentContacts, setSavedParentContacts] = useState(() =>
-    loadSavedParentContacts(),
-  );
+  const [savedSupportDiaries, setSavedSupportDiaries] = useState([]);
+  const [savedParentContacts, setSavedParentContacts] = useState([]);
   const [supportDiaryForm, setSupportDiaryForm] = useState({
     activity: "",
     appearance: "",
@@ -1218,7 +1056,7 @@ export default function App() {
   const [listFilter, setListFilter] = useState("all");
   /** 支援計画生成時に API へ渡す追加プロンプト（詳細画面） */
   const [planPromptExtra, setPlanPromptExtra] = useState("");
-  const [planFeedbacks, setPlanFeedbacks] = useState(() => loadPlanFeedbacks());
+  const [planFeedbacks, setPlanFeedbacks] = useState([]);
   const [form, setForm] = useState({
     name: "",
     age: "4歳",
@@ -1235,35 +1073,105 @@ export default function App() {
   const handleChange = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   useEffect(() => {
-    persistSavedPrograms(savedPrograms);
-  }, [savedPrograms]);
+    if (!supabase) {
+      queueMicrotask(() => {
+        setSession(null);
+        setAuthReady(true);
+      });
+      return;
+    }
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      if (!cancelled) {
+        setSession(sess);
+        setAuthReady(true);
+      }
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+      if (!sess) {
+        setChildren([]);
+        setSelectedChild(null);
+        setSavedPrograms([]);
+        setSupportRecords([]);
+        setSavedSupportDiaries([]);
+        setSavedParentContacts([]);
+        setPlanFeedbacks([]);
+        setSelectedSaved(null);
+        setSelectedSavedChildName(null);
+        setScreen("list");
+        setEditingChildId(null);
+        setEditingOriginalName(null);
+        setForm({
+          name: "",
+          age: "4歳",
+          disability: "自閉スペクトラム症",
+          severity: "中度",
+          motorLevel: "中",
+          communicationLevel: "低",
+          socialLevel: "低",
+          currentIssues: "",
+          goals: "",
+          notes: "",
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   useEffect(() => {
-    persistSupportRecords(supportRecords);
-  }, [supportRecords]);
-
-  useEffect(() => {
-    persistSavedSupportDiaries(savedSupportDiaries);
-  }, [savedSupportDiaries]);
-
-  useEffect(() => {
-    persistSavedParentContacts(savedParentContacts);
-  }, [savedParentContacts]);
+    if (!supabase || !session?.user?.id) {
+      queueMicrotask(() => setWorkspaceLoading(false));
+      return;
+    }
+    let cancelled = false;
+    const uid = session.user.id;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setWorkspaceLoading(true);
+      setError(null);
+      workspaceDb
+        .fetchWorkspace(supabase, uid)
+        .then((w) => {
+          if (cancelled) return;
+          setChildren(w.children);
+          setSavedPrograms(w.savedPrograms);
+          setSupportRecords(w.supportRecords);
+          setSavedSupportDiaries(w.savedSupportDiaries);
+          setSavedParentContacts(w.savedParentContacts);
+          setPlanFeedbacks(w.planFeedbacks);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : String(e));
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setWorkspaceLoading(false);
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, session?.user?.id]);
 
   useEffect(() => {
     if (!selectedChild?.id) return;
-    setSupportDiaryForm({ activity: "", appearance: "", concerns: "" });
-    setSupportDiaryOutput("");
-    setSupportDiaryGeneratedAt(null);
-    setParentContactForm({ enjoyed: "", effort: "", handover: "" });
-    setParentContactOutput("");
-    setParentContactGeneratedAt(null);
-    setError(null);
+    queueMicrotask(() => {
+      setSupportDiaryForm({ activity: "", appearance: "", concerns: "" });
+      setSupportDiaryOutput("");
+      setSupportDiaryGeneratedAt(null);
+      setParentContactForm({ enjoyed: "", effort: "", handover: "" });
+      setParentContactOutput("");
+      setParentContactGeneratedAt(null);
+      setError(null);
+    });
   }, [selectedChild?.id]);
-
-  useEffect(() => {
-    persistPlanFeedbacks(planFeedbacks);
-  }, [planFeedbacks]);
 
   useEffect(() => {
     if (!printRequested) return;
@@ -1342,8 +1250,9 @@ export default function App() {
   }, [planFeedbacks, selectedChild, generatedProgram]);
 
   const recordPlanFeedback = useCallback(
-    (rating) => {
+    async (rating) => {
       if (!selectedChild || !generatedProgram.trim()) return;
+      if (!supabase || !session?.user?.id) return;
       const ck = planFeedbackChildKey(selectedChild);
       if (ck == null) return;
       if (rating !== "up" && rating !== "down") return;
@@ -1354,9 +1263,14 @@ export default function App() {
         rating,
         createdAt: new Date().toISOString(),
       };
-      setPlanFeedbacks((prev) => [...prev, entry]);
+      try {
+        await workspaceDb.insertPlanFeedback(supabase, session.user.id, entry);
+        setPlanFeedbacks((prev) => [...prev, entry]);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     },
-    [selectedChild, generatedProgram],
+    [selectedChild, generatedProgram, supabase, session],
   );
 
   const filteredChildren = useMemo(() => {
@@ -1389,76 +1303,96 @@ export default function App() {
     setEditingOriginalName(null);
   };
 
-  const upsertChild = () => {
-    if (!form.name) return;
+  const upsertChild = async () => {
+    if (!form.name || !supabase || !session?.user?.id) return;
     const nextName = form.name.trim();
-
-    if (editingChildId) {
-      const prevName = editingOriginalName;
-      setChildren((c) =>
-        c.map((child) =>
-          child.id === editingChildId
-            ? {
-                ...child,
-                ...form,
-                name: nextName,
-              }
-            : child,
-        ),
-      );
-
-      // 名前紐づけデータの整合性（保存済みプログラム/支援記録）
-      if (prevName && prevName !== nextName) {
-        setSavedPrograms((prev) =>
-          prev.map((p) =>
-            p.childName === prevName ? { ...p, childName: nextName } : p,
+    setChildSaveBusy(true);
+    setError(null);
+    try {
+      if (editingChildId) {
+        const prevName = editingOriginalName;
+        await workspaceDb.updateChild(
+          supabase,
+          session.user.id,
+          editingChildId,
+          form,
+        );
+        if (prevName && prevName !== nextName) {
+          await workspaceDb.syncChildNameAcrossWorkspace(
+            supabase,
+            session.user.id,
+            editingChildId,
+            nextName,
+          );
+        }
+        setChildren((c) =>
+          c.map((child) =>
+            String(child.id) === String(editingChildId)
+              ? {
+                  ...child,
+                  ...form,
+                  name: nextName,
+                }
+              : child,
           ),
         );
-        setSupportRecords((prev) =>
-          prev.map((r) =>
-            r.childName === prevName ? { ...r, childName: nextName } : r,
-          ),
+        if (prevName && prevName !== nextName) {
+          setSavedPrograms((prev) =>
+            prev.map((p) =>
+              p.childName === prevName ? { ...p, childName: nextName } : p,
+            ),
+          );
+          setSupportRecords((prev) =>
+            prev.map((r) =>
+              r.childName === prevName ? { ...r, childName: nextName } : r,
+            ),
+          );
+          setSavedSupportDiaries((prev) =>
+            prev.map((p) =>
+              p.childName === prevName ? { ...p, childName: nextName } : p,
+            ),
+          );
+          setSavedParentContacts((prev) =>
+            prev.map((p) =>
+              p.childName === prevName ? { ...p, childName: nextName } : p,
+            ),
+          );
+          setSelectedSavedChildName((n) => (n === prevName ? nextName : n));
+          setSelectedSaved((p) =>
+            p && p.childName === prevName ? { ...p, childName: nextName } : p,
+          );
+        }
+        setSelectedChild((c) =>
+          c && String(c.id) === String(editingChildId)
+            ? { ...c, ...form, name: nextName }
+            : c,
         );
-        setSavedSupportDiaries((prev) =>
-          prev.map((p) =>
-            p.childName === prevName ? { ...p, childName: nextName } : p,
-          ),
-        );
-        setSavedParentContacts((prev) =>
-          prev.map((p) =>
-            p.childName === prevName ? { ...p, childName: nextName } : p,
-          ),
-        );
-        setSelectedSavedChildName((n) => (n === prevName ? nextName : n));
-        setSelectedSaved((p) =>
-          p && p.childName === prevName ? { ...p, childName: nextName } : p,
-        );
+        resetChildForm();
+        setScreen("detail");
+        return;
       }
 
-      setSelectedChild((c) =>
-        c && c.id === editingChildId ? { ...c, ...form, name: nextName } : c,
+      const created = await workspaceDb.insertChild(
+        supabase,
+        session.user.id,
+        form,
       );
+      setChildren((c) => [...c, created]);
       resetChildForm();
-      setScreen("detail");
-      return;
+      setScreen("list");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setChildSaveBusy(false);
     }
-
-    setChildren((c) => [
-      ...c,
-      {
-        ...form,
-        name: nextName,
-        id: Date.now(),
-        createdAt: new Date().toLocaleDateString("ja-JP"),
-        programs: [],
-      },
-    ]);
-    resetChildForm();
-    setScreen("list");
   };
 
   const handleGenerate = async () => {
     if (!selectedChild) return;
+    if (!session?.user?.id) {
+      setError("個別支援計画書を生成するにはログインが必要です。");
+      return;
+    }
     setError(null);
     setGeneratedProgram("");
     setGeneratedAtIso(null);
@@ -1480,22 +1414,28 @@ export default function App() {
     }
   };
 
-  const handleSaveEditFeedback = () => {
+  const handleSaveEditFeedback = async () => {
     if (!selectedChild || !generatedProgram.trim()) return;
+    if (!supabase || !session?.user?.id) return;
     const edited = generatedProgram.trim();
     const original = (programAiOriginal || "").trim() || edited;
-    appendProgramEditFeedback({
-      original,
-      edited,
-      childName: selectedChild.name,
-      date: new Date().toISOString(),
-    });
+    try {
+      await workspaceDb.insertProgramEditFeedback(supabase, session.user.id, {
+        original,
+        edited,
+        childName: selectedChild.name,
+        date: new Date().toISOString(),
+      });
+    } catch {
+      /* 保存失敗しても編集モードは終了させる */
+    }
     setProgramEditMode(false);
   };
 
-  const handleSaveProgram = () => {
+  const handleSaveProgram = async () => {
     if (!selectedChild) return;
     if (!generatedProgram.trim()) return;
+    if (!supabase || !session?.user?.id) return;
     const createdAt = generatedAtIso || new Date().toISOString();
     const entry = {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
@@ -1505,7 +1445,12 @@ export default function App() {
       createdAtLabel: formatJaDateTime(createdAt),
       programText: generatedProgram,
     };
-    setSavedPrograms((prev) => [entry, ...prev]);
+    try {
+      await workspaceDb.insertSavedProgram(supabase, session.user.id, entry);
+      setSavedPrograms((prev) => [entry, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const handleGenerateSupportDiary = async () => {
@@ -1538,9 +1483,10 @@ export default function App() {
     }
   };
 
-  const handleSaveSupportDiary = () => {
+  const handleSaveSupportDiary = async () => {
     if (!selectedChild) return;
     if (!supportDiaryOutput.trim()) return;
+    if (!supabase || !session?.user?.id) return;
     const createdAt = supportDiaryGeneratedAt || new Date().toISOString();
     const entry = {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
@@ -1555,7 +1501,12 @@ export default function App() {
         concerns: supportDiaryForm.concerns.trim(),
       },
     };
-    setSavedSupportDiaries((prev) => [entry, ...prev]);
+    try {
+      await workspaceDb.insertSavedSupportDiary(supabase, session.user.id, entry);
+      setSavedSupportDiaries((prev) => [entry, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const handleGenerateParentContact = async () => {
@@ -1588,9 +1539,10 @@ export default function App() {
     }
   };
 
-  const handleSaveParentContact = () => {
+  const handleSaveParentContact = async () => {
     if (!selectedChild) return;
     if (!parentContactOutput.trim()) return;
+    if (!supabase || !session?.user?.id) return;
     const createdAt = parentContactGeneratedAt || new Date().toISOString();
     const entry = {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
@@ -1605,7 +1557,12 @@ export default function App() {
         handover: parentContactForm.handover.trim(),
       },
     };
-    setSavedParentContacts((prev) => [entry, ...prev]);
+    try {
+      await workspaceDb.insertSavedParentContact(supabase, session.user.id, entry);
+      setSavedParentContacts((prev) => [entry, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const handleExportProgramPdf = useCallback(async () => {
@@ -1811,6 +1768,57 @@ export default function App() {
     ...overrides,
   });
 
+  if (!isSupabaseConfigured()) {
+    return (
+      <div style={s.wrap} className="app-root">
+        <div style={{ ...s.body, paddingTop: 32 }}>
+          <div style={{ ...s.card, maxWidth: 520, margin: "0 auto" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#2a3a2a", marginBottom: 10 }}>
+              Supabase の環境変数が未設定です
+            </div>
+            <p style={{ fontSize: 13, lineHeight: 1.7, color: "#3a4a3a", margin: 0 }}>
+              プロジェクト直下に <code style={{ fontSize: 12 }}>.env</code> を作成し、
+              <code style={{ fontSize: 12 }}> VITE_SUPABASE_URL </code> と{" "}
+              <code style={{ fontSize: 12 }}> VITE_SUPABASE_ANON_KEY </code> を設定してください。
+              データベースのテーブル作成と Row Level Security の手順は{" "}
+              <code style={{ fontSize: 12 }}>docs/SUPABASE_SETUP.md</code> を参照してください。
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authReady) {
+    return (
+      <div
+        style={{
+          ...s.wrap,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#2d5a3d",
+          fontSize: 14,
+          fontWeight: 700,
+        }}
+        className="app-root"
+      >
+        認証を確認中…
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <AuthScreen
+        supabase={supabase}
+        cardStyle={s.card}
+        inputStyle={s.input}
+        btnStyle={s.btn}
+      />
+    );
+  }
+
   return (
     <div style={s.wrap} className="app-root">
       <div style={s.header}>
@@ -1855,48 +1863,103 @@ export default function App() {
             個別発達支援プログラム管理
           </div>
         </div>
-        {screen === "list" && (
-          <>
-            <button
-              type="button"
-              onClick={() => setScreen("savedList")}
-              style={{
-                marginLeft: "auto",
-                padding: "8px 14px",
-                borderRadius: 20,
-                background: "transparent",
-                color: "#2d5a3d",
-                border: "2px solid #c8e0cc",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              保存済み一覧 ({savedCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setScreen("add")}
-              style={{
-                padding: "8px 16px",
-                borderRadius: 20,
-                background: "#2d5a3d",
-                color: "#fff",
-                border: "none",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              ＋ 追加
-            </button>
-          </>
-        )}
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
+          <span
+            title={session.user?.email ?? ""}
+            style={{
+              fontSize: 10,
+              color: "#7a8a7a",
+              maxWidth: 120,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {session.user?.email ?? ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => void supabase.auth.signOut()}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 20,
+              background: "transparent",
+              color: "#7a6a5a",
+              border: "1px solid #ddd",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            ログアウト
+          </button>
+          {screen === "list" && (
+            <>
+              <button
+                type="button"
+                onClick={() => setScreen("savedList")}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 20,
+                  background: "transparent",
+                  color: "#2d5a3d",
+                  border: "2px solid #c8e0cc",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                保存済み一覧 ({savedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScreen("add")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 20,
+                  background: "#2d5a3d",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                ＋ 追加
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={s.body}>
+        {workspaceLoading && (
+          <div
+            style={{
+              ...s.card,
+              textAlign: "center",
+              padding: "16px 12px",
+              marginBottom: 12,
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#2d5a3d",
+            }}
+          >
+            データを読み込み中…
+          </div>
+        )}
         {screen === "list" && (
           <div>
             <div style={{ marginBottom: 16 }}>
@@ -2322,11 +2385,19 @@ export default function App() {
             </div>
             <button
               type="button"
-              onClick={upsertChild}
-              disabled={!form.name}
-              style={{ ...s.btn, opacity: form.name ? 1 : 0.5 }}
+              onClick={() => void upsertChild()}
+              disabled={!form.name || childSaveBusy}
+              style={{
+                ...s.btn,
+                opacity: form.name && !childSaveBusy ? 1 : 0.5,
+                cursor: childSaveBusy ? "wait" : "pointer",
+              }}
             >
-              {editingChildId ? "更新する" : "登録する"}
+              {childSaveBusy
+                ? "保存中…"
+                : editingChildId
+                  ? "更新する"
+                  : "登録する"}
             </button>
           </div>
         )}
@@ -2423,13 +2494,25 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const ok = window.confirm(
                         `${selectedChild.name} を削除しますか？\n（保存済みプログラム・支援記録・AI支援日誌・保護者連絡帳も一覧から除外されます）`,
                       );
                       if (!ok) return;
                       const nameToDelete = selectedChild.name;
                       const idToDelete = selectedChild.id;
+                      if (supabase && session?.user?.id) {
+                        try {
+                          await workspaceDb.deleteChild(
+                            supabase,
+                            session.user.id,
+                            idToDelete,
+                          );
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : String(e));
+                          return;
+                        }
+                      }
                       setChildren((c) => c.filter((x) => x.id !== idToDelete));
                       setSavedPrograms((prev) =>
                         prev.filter((p) => p.childName !== nameToDelete),
@@ -2442,6 +2525,11 @@ export default function App() {
                       );
                       setSavedParentContacts((prev) =>
                         prev.filter((p) => p.childName !== nameToDelete),
+                      );
+                      setPlanFeedbacks((prev) =>
+                        prev.filter(
+                          (f) => String(f.childId) !== String(idToDelete),
+                        ),
                       );
                       setSelectedSavedChildName((n) =>
                         n === nameToDelete ? null : n,
@@ -3057,12 +3145,14 @@ export default function App() {
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                if (!supabase || !session?.user?.id) return;
                 const date = recordForm.date || todayYyyyMmDd();
                 const createdAt = new Date().toISOString();
                 const entry = {
                   id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
                   childName: selectedChild.name,
+                  childId: selectedChild.id ?? null,
                   date,
                   createdAt,
                   mood: recordForm.mood.trim(),
@@ -3070,8 +3160,17 @@ export default function App() {
                   challenges: recordForm.challenges.trim(),
                   handover: recordForm.handover.trim(),
                 };
-                setSupportRecords((prev) => [entry, ...prev]);
-                setScreen("detail");
+                try {
+                  await workspaceDb.insertSupportRecord(
+                    supabase,
+                    session.user.id,
+                    entry,
+                  );
+                  setSupportRecords((prev) => [entry, ...prev]);
+                  setScreen("detail");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                }
               }}
               style={s.btn}
             >
