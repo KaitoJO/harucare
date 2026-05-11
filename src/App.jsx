@@ -1033,7 +1033,16 @@ export default function App() {
     challenges: "",
     handover: "",
   });
-  const [detailAiTab, setDetailAiTab] = useState("support-diary");
+  /** 子ども詳細: 個別支援計画書 | 支援日誌 | 保護者連絡帳 */
+  const [detailDocTab, setDetailDocTab] = useState("plan");
+  const [detailPlanListExpanded, setDetailPlanListExpanded] = useState(false);
+  const [detailDiaryListExpanded, setDetailDiaryListExpanded] = useState(false);
+  const [detailContactListExpanded, setDetailContactListExpanded] =
+    useState(false);
+  const [savedListExpanded, setSavedListExpanded] = useState(false);
+  const [savedHistoryExpanded, setSavedHistoryExpanded] = useState(false);
+  const [saveToastVisible, setSaveToastVisible] = useState(false);
+  const saveToastTimerRef = useRef(null);
   const [savedSupportDiaries, setSavedSupportDiaries] = useState([]);
   const [savedParentContacts, setSavedParentContacts] = useState([]);
   const [supportDiaryForm, setSupportDiaryForm] = useState({
@@ -1163,12 +1172,16 @@ export default function App() {
   useEffect(() => {
     if (!selectedChild?.id) return;
     queueMicrotask(() => {
+      setDetailDocTab("plan");
       setSupportDiaryForm({ activity: "", appearance: "", concerns: "" });
       setSupportDiaryOutput("");
       setSupportDiaryGeneratedAt(null);
       setParentContactForm({ enjoyed: "", effort: "", handover: "" });
       setParentContactOutput("");
       setParentContactGeneratedAt(null);
+      setDetailPlanListExpanded(false);
+      setDetailDiaryListExpanded(false);
+      setDetailContactListExpanded(false);
       setError(null);
     });
   }, [selectedChild?.id]);
@@ -1238,6 +1251,30 @@ export default function App() {
       .slice()
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }, [savedParentContacts, selectedChild]);
+
+  const selectedChildSavedPrograms = useMemo(() => {
+    if (!selectedChild?.name) return [];
+    return savedPrograms
+      .filter((p) => p.childName === selectedChild.name)
+      .slice()
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  }, [savedPrograms, selectedChild]);
+
+  const showSaveToast = useCallback(() => {
+    if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+    setSaveToastVisible(true);
+    saveToastTimerRef.current = setTimeout(() => {
+      setSaveToastVisible(false);
+      saveToastTimerRef.current = null;
+    }, 2000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+    },
+    [],
+  );
 
   const currentGenPlanFeedback = useMemo(() => {
     const ck = planFeedbackChildKey(selectedChild);
@@ -1369,6 +1406,7 @@ export default function App() {
         );
         resetChildForm();
         setScreen("detail");
+        showSaveToast();
         return;
       }
 
@@ -1380,6 +1418,7 @@ export default function App() {
       setChildren((c) => [...c, created]);
       resetChildForm();
       setScreen("list");
+      showSaveToast();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1426,6 +1465,7 @@ export default function App() {
         childName: selectedChild.name,
         date: new Date().toISOString(),
       });
+      showSaveToast();
     } catch {
       /* 保存失敗しても編集モードは終了させる */
     }
@@ -1448,6 +1488,7 @@ export default function App() {
     try {
       await workspaceDb.insertSavedProgram(supabase, session.user.id, entry);
       setSavedPrograms((prev) => [entry, ...prev]);
+      showSaveToast();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -1504,6 +1545,7 @@ export default function App() {
     try {
       await workspaceDb.insertSavedSupportDiary(supabase, session.user.id, entry);
       setSavedSupportDiaries((prev) => [entry, ...prev]);
+      showSaveToast();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -1560,6 +1602,7 @@ export default function App() {
     try {
       await workspaceDb.insertSavedParentContact(supabase, session.user.id, entry);
       setSavedParentContacts((prev) => [entry, ...prev]);
+      showSaveToast();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -1907,7 +1950,10 @@ export default function App() {
             <>
               <button
                 type="button"
-                onClick={() => setScreen("savedList")}
+                onClick={() => {
+                  setSavedListExpanded(false);
+                  setScreen("savedList");
+                }}
                 style={{
                   padding: "8px 14px",
                   borderRadius: 20,
@@ -2635,60 +2681,205 @@ export default function App() {
             )}
 
             <div style={s.card}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#2d5a3d", marginBottom: 6 }}>
-                AI 記録・連絡
-              </div>
               <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 12, lineHeight: 1.5 }}>
-                下記の基本情報（診断・年齢・課題など）は AI に自動で渡されます。
+                基本情報（診断・年齢・課題など）は AI に自動で渡されます。
               </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  marginBottom: 16,
+                  flexWrap: "wrap",
+                }}
+              >
                 <button
                   type="button"
-                  onClick={() => setDetailAiTab("support-diary")}
+                  onClick={() => setDetailDocTab("plan")}
                   style={{
-                    flex: 1,
-                    padding: "10px 12px",
+                    flex: "1 1 30%",
+                    minWidth: 100,
+                    padding: "10px 8px",
                     borderRadius: 10,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: 700,
                     cursor: "pointer",
                     fontFamily: "inherit",
                     border:
-                      detailAiTab === "support-diary"
+                      detailDocTab === "plan"
                         ? "2px solid #2d5a3d"
                         : "2px solid #c8e0cc",
-                    background: detailAiTab === "support-diary" ? "#2d5a3d" : "#fafcfa",
-                    color: detailAiTab === "support-diary" ? "#fff" : "#2d5a3d",
+                    background: detailDocTab === "plan" ? "#2d5a3d" : "#fafcfa",
+                    color: detailDocTab === "plan" ? "#fff" : "#2d5a3d",
                   }}
                 >
-                  支援記録
+                  個別支援計画書
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDetailAiTab("parent-contact")}
+                  onClick={() => setDetailDocTab("diary")}
                   style={{
-                    flex: 1,
-                    padding: "10px 12px",
+                    flex: "1 1 30%",
+                    minWidth: 100,
+                    padding: "10px 8px",
                     borderRadius: 10,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: 700,
                     cursor: "pointer",
                     fontFamily: "inherit",
                     border:
-                      detailAiTab === "parent-contact"
+                      detailDocTab === "diary"
+                        ? "2px solid #2d5a3d"
+                        : "2px solid #c8e0cc",
+                    background: detailDocTab === "diary" ? "#2d5a3d" : "#fafcfa",
+                    color: detailDocTab === "diary" ? "#fff" : "#2d5a3d",
+                  }}
+                >
+                  支援日誌
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailDocTab("contact")}
+                  style={{
+                    flex: "1 1 30%",
+                    minWidth: 100,
+                    padding: "10px 8px",
+                    borderRadius: 10,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    border:
+                      detailDocTab === "contact"
                         ? "2px solid #2d5a3d"
                         : "2px solid #c8e0cc",
                     background:
-                      detailAiTab === "parent-contact" ? "#2d5a3d" : "#fafcfa",
-                    color:
-                      detailAiTab === "parent-contact" ? "#fff" : "#2d5a3d",
+                      detailDocTab === "contact" ? "#2d5a3d" : "#fafcfa",
+                    color: detailDocTab === "contact" ? "#fff" : "#2d5a3d",
                   }}
                 >
                   保護者連絡帳
                 </button>
               </div>
 
-              {detailAiTab === "support-diary" && (
+              {detailDocTab === "plan" && (
+                <>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={s.label}>支援計画生成の追加プロンプト（任意）</label>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#7a8a7a",
+                        marginBottom: 8,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      生成時に AI へ伝えたい指示や現場の文脈を追記できます（音声入力可）
+                    </div>
+                    <VoiceAppendTextarea
+                      value={planPromptExtra}
+                      onValueChange={setPlanPromptExtra}
+                      rows={4}
+                      placeholder="例：来年度の入園に向けて生活リズムを整えたい、など"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    disabled={loading}
+                    style={{
+                      ...s.btnGold,
+                      marginBottom: 16,
+                      opacity: loading ? 0.65 : 1,
+                      cursor: loading ? "wait" : "pointer",
+                    }}
+                  >
+                    🌿 6ヶ月プログラムを生成する
+                  </button>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#7a8a7a",
+                      letterSpacing: "0.08em",
+                      marginBottom: 8,
+                    }}
+                  >
+                    保存済み（このお子さま）
+                  </div>
+                  {selectedChildSavedPrograms.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
+                      まだありません。生成後に「保存する」から保存できます。
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {(detailPlanListExpanded
+                          ? selectedChildSavedPrograms
+                          : selectedChildSavedPrograms.slice(0, 10)
+                        ).map((p) => (
+                          <div
+                            key={p.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              setSelectedSaved(p);
+                              setSelectedSavedChildName(selectedChild.name);
+                              setScreen("savedProgram");
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedSaved(p);
+                                setSelectedSavedChildName(selectedChild.name);
+                                setScreen("savedProgram");
+                              }
+                            }}
+                            style={{
+                              border: "1px solid #e0eae0",
+                              borderRadius: 12,
+                              padding: "12px 12px",
+                              background: "#fafcfa",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: "#2a3a2a",
+                                marginBottom: 4,
+                              }}
+                            >
+                              {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#7a8a7a" }}>
+                              タップして閲覧
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {!detailPlanListExpanded &&
+                        selectedChildSavedPrograms.length > 10 && (
+                          <button
+                            type="button"
+                            onClick={() => setDetailPlanListExpanded(true)}
+                            style={{
+                              ...s.btn,
+                              marginTop: 12,
+                              background: "transparent",
+                              color: "#2d5a3d",
+                              border: "2px solid #c8e0cc",
+                            }}
+                          >
+                            もっと見る（全{selectedChildSavedPrograms.length}件）
+                          </button>
+                        )}
+                    </>
+                  )}
+                </>
+              )}
+
+              {detailDocTab === "diary" && (
                 <>
                   <div style={{ marginBottom: 14 }}>
                     <label style={s.label}>今日の活動</label>
@@ -2787,33 +2978,150 @@ export default function App() {
                       まだありません。整形後に「この支援日誌を保存」から保存できます。
                     </div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {selectedSavedSupportDiaries.map((p) => (
-                        <div
-                          key={p.id}
-                          style={{
-                            border: "1px solid #e0eae0",
-                            borderRadius: 12,
-                            padding: "12px 12px",
-                            background: "#fafcfa",
-                            maxHeight: 280,
-                            overflow: "auto",
-                          }}
-                        >
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {(detailDiaryListExpanded
+                          ? selectedSavedSupportDiaries
+                          : selectedSavedSupportDiaries.slice(0, 10)
+                        ).map((p) => (
                           <div
-                            style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                            key={p.id}
+                            style={{
+                              border: "1px solid #e0eae0",
+                              borderRadius: 12,
+                              padding: "12px 12px",
+                              background: "#fafcfa",
+                              maxHeight: 280,
+                              overflow: "auto",
+                            }}
                           >
-                            {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                            <div
+                              style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                            >
+                              {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                            </div>
+                            <ProgramMarkdown text={p.programText} />
                           </div>
-                          <ProgramMarkdown text={p.programText} />
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      {!detailDiaryListExpanded &&
+                        selectedSavedSupportDiaries.length > 10 && (
+                          <button
+                            type="button"
+                            onClick={() => setDetailDiaryListExpanded(true)}
+                            style={{
+                              ...s.btn,
+                              marginTop: 12,
+                              background: "transparent",
+                              color: "#2d5a3d",
+                              border: "2px solid #c8e0cc",
+                            }}
+                          >
+                            もっと見る（全{selectedSavedSupportDiaries.length}件）
+                          </button>
+                        )}
+                    </>
                   )}
+
+                  <div
+                    style={{
+                      marginTop: 20,
+                      paddingTop: 18,
+                      borderTop: "1px solid #e8eee8",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#2d5a3d" }}>
+                        簡易記録（手入力）
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecordForm({
+                            date: todayYyyyMmDd(),
+                            mood: "",
+                            success: "",
+                            challenges: "",
+                            handover: "",
+                          });
+                          setScreen("recordAdd");
+                        }}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 999,
+                          background: "transparent",
+                          color: "#2d5a3d",
+                          border: "2px solid #c8e0cc",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        記録を追加
+                      </button>
+                    </div>
+
+                    {selectedSupportRecords.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
+                        まだ記録がありません。「記録を追加」から追加できます。
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {selectedSupportRecords.map((r) => (
+                          <div
+                            key={r.id}
+                            style={{
+                              border: "1px solid #e0eae0",
+                              borderRadius: 12,
+                              padding: "12px 12px",
+                              background: "#fafcfa",
+                            }}
+                          >
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a" }}>
+                              {formatJaDate(r.date)}
+                            </div>
+                            {r.mood && (
+                              <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                                <span style={{ color: "#7a8a7a" }}>今日の様子：</span>
+                                {r.mood}
+                              </div>
+                            )}
+                            {r.success && (
+                              <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                                <span style={{ color: "#7a8a7a" }}>できたこと：</span>
+                                {r.success}
+                              </div>
+                            )}
+                            {r.challenges && (
+                              <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                                <span style={{ color: "#7a8a7a" }}>課題：</span>
+                                {r.challenges}
+                              </div>
+                            )}
+                            {r.handover && (
+                              <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
+                                <span style={{ color: "#7a8a7a" }}>次回への申し送り：</span>
+                                {r.handover}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
-              {detailAiTab === "parent-contact" && (
+              {detailDocTab === "contact" && (
                 <>
                   <div style={{ marginBottom: 14 }}>
                     <label style={s.label}>今日楽しめたこと</label>
@@ -2918,148 +3226,53 @@ export default function App() {
                       まだありません。生成後に「この連絡帳を保存」から保存できます。
                     </div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {selectedSavedParentContacts.map((p) => (
-                        <div
-                          key={p.id}
-                          style={{
-                            border: "1px solid #e0eae0",
-                            borderRadius: 12,
-                            padding: "12px 12px",
-                            background: "#fafcfa",
-                            maxHeight: 280,
-                            overflow: "auto",
-                          }}
-                        >
+                    <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {(detailContactListExpanded
+                          ? selectedSavedParentContacts
+                          : selectedSavedParentContacts.slice(0, 10)
+                        ).map((p) => (
                           <div
-                            style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                            key={p.id}
+                            style={{
+                              border: "1px solid #e0eae0",
+                              borderRadius: 12,
+                              padding: "12px 12px",
+                              background: "#fafcfa",
+                              maxHeight: 280,
+                              overflow: "auto",
+                            }}
                           >
-                            {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                            <div
+                              style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                            >
+                              {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                            </div>
+                            <ProgramMarkdown text={p.programText} />
                           </div>
-                          <ProgramMarkdown text={p.programText} />
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                      {!detailContactListExpanded &&
+                        selectedSavedParentContacts.length > 10 && (
+                          <button
+                            type="button"
+                            onClick={() => setDetailContactListExpanded(true)}
+                            style={{
+                              ...s.btn,
+                              marginTop: 12,
+                              background: "transparent",
+                              color: "#2d5a3d",
+                              border: "2px solid #c8e0cc",
+                            }}
+                          >
+                            もっと見る（全{selectedSavedParentContacts.length}件）
+                          </button>
+                        )}
+                    </>
                   )}
                 </>
               )}
             </div>
-
-            <div style={s.card}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  marginBottom: 12,
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#2d5a3d" }}>
-                  簡易記録（手入力）
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecordForm({
-                      date: todayYyyyMmDd(),
-                      mood: "",
-                      success: "",
-                      challenges: "",
-                      handover: "",
-                    });
-                    setScreen("recordAdd");
-                  }}
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    background: "transparent",
-                    color: "#2d5a3d",
-                    border: "2px solid #c8e0cc",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  記録を追加
-                </button>
-              </div>
-
-              {selectedSupportRecords.length === 0 ? (
-                <div style={{ fontSize: 12, color: "#7a8a7a", lineHeight: 1.6 }}>
-                  まだ記録がありません。右上の「記録を追加」から追加できます。
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {selectedSupportRecords.map((r) => (
-                    <div
-                      key={r.id}
-                      style={{
-                        border: "1px solid #e0eae0",
-                        borderRadius: 12,
-                        padding: "12px 12px",
-                        background: "#fafcfa",
-                      }}
-                    >
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a" }}>
-                        {formatJaDate(r.date)}
-                      </div>
-                      {r.mood && (
-                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
-                          <span style={{ color: "#7a8a7a" }}>今日の様子：</span>
-                          {r.mood}
-                        </div>
-                      )}
-                      {r.success && (
-                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
-                          <span style={{ color: "#7a8a7a" }}>できたこと：</span>
-                          {r.success}
-                        </div>
-                      )}
-                      {r.challenges && (
-                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
-                          <span style={{ color: "#7a8a7a" }}>課題：</span>
-                          {r.challenges}
-                        </div>
-                      )}
-                      {r.handover && (
-                        <div style={{ marginTop: 6, fontSize: 12, color: "#2a3a2a", lineHeight: 1.6 }}>
-                          <span style={{ color: "#7a8a7a" }}>次回への申し送り：</span>
-                          {r.handover}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={s.card}>
-              <label style={s.label}>支援計画生成の追加プロンプト（任意）</label>
-              <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 8, lineHeight: 1.5 }}>
-                生成時に AI へ伝えたい指示や現場の文脈を追記できます（音声入力可）
-              </div>
-              <VoiceAppendTextarea
-                value={planPromptExtra}
-                onValueChange={setPlanPromptExtra}
-                rows={4}
-                placeholder="例：来年度の入園に向けて生活リズムを整えたい、など"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={loading}
-              style={{
-                ...s.btnGold,
-                opacity: loading ? 0.65 : 1,
-                cursor: loading ? "wait" : "pointer",
-              }}
-            >
-              🌿 6ヶ月プログラムを生成する
-            </button>
           </div>
         )}
 
@@ -3167,6 +3380,7 @@ export default function App() {
                     entry,
                   );
                   setSupportRecords((prev) => [entry, ...prev]);
+                  showSaveToast();
                   setScreen("detail");
                 } catch (e) {
                   setError(e instanceof Error ? e.message : String(e));
@@ -3521,54 +3735,77 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              savedGroups.map((g) => (
-                <div
-                  key={g.childName}
-                  role="button"
-                  tabIndex={0}
-                  style={{ ...s.card, cursor: "pointer" }}
-                  onClick={() => {
-                    setSelectedSavedChildName(g.childName);
-                    setSelectedSaved(null);
-                    setScreen("savedChildHistory");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setSelectedSavedChildName(g.childName);
-                      setSelectedSaved(null);
-                      setScreen("savedChildHistory");
-                    }
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <>
+                {(savedListExpanded ? savedGroups : savedGroups.slice(0, 10)).map(
+                  (g) => (
                     <div
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        background: "#f0f7f2",
-                        border: "1px solid #c8e0cc",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 18,
+                      key={g.childName}
+                      role="button"
+                      tabIndex={0}
+                      style={{ ...s.card, cursor: "pointer" }}
+                      onClick={() => {
+                        setSavedHistoryExpanded(false);
+                        setSelectedSavedChildName(g.childName);
+                        setSelectedSaved(null);
+                        setScreen("savedChildHistory");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSavedHistoryExpanded(false);
+                          setSelectedSavedChildName(g.childName);
+                          setSelectedSaved(null);
+                          setScreen("savedChildHistory");
+                        }
                       }}
                     >
-                      📄
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
-                        {g.childName}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 12,
+                            background: "#f0f7f2",
+                            border: "1px solid #c8e0cc",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 18,
+                          }}
+                        >
+                          📄
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "#2a3a2a" }}>
+                            {g.childName}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
+                            {g.latestAt
+                              ? `${formatJaDateTime(g.latestAt)} · ${g.count}件`
+                              : `${g.count}件`}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
                       </div>
-                      <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
-                        {g.latestAt ? `${formatJaDateTime(g.latestAt)} · ${g.count}件` : `${g.count}件`}
-                      </div>
                     </div>
-                    <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
-                  </div>
-                </div>
-              ))
+                  ),
+                )}
+                {!savedListExpanded && savedGroups.length > 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setSavedListExpanded(true)}
+                    style={{
+                      ...s.btn,
+                      marginTop: 4,
+                      background: "transparent",
+                      color: "#2d5a3d",
+                      border: "2px solid #c8e0cc",
+                    }}
+                  >
+                    もっと見る（全{savedGroups.length}件）
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -3591,52 +3828,72 @@ export default function App() {
               </div>
             </div>
 
-            {selectedChildHistory.map((p) => (
-              <div
-                key={p.id}
-                role="button"
-                tabIndex={0}
-                style={{ ...s.card, cursor: "pointer" }}
-                onClick={() => {
-                  setSelectedSaved(p);
-                  setScreen("savedProgram");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
+            <>
+              {(savedHistoryExpanded
+                ? selectedChildHistory
+                : selectedChildHistory.slice(0, 10)
+              ).map((p) => (
+                <div
+                  key={p.id}
+                  role="button"
+                  tabIndex={0}
+                  style={{ ...s.card, cursor: "pointer" }}
+                  onClick={() => {
                     setSelectedSaved(p);
                     setScreen("savedProgram");
-                  }
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 12,
-                      background: "#f0f7f2",
-                      border: "1px solid #c8e0cc",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 18,
-                    }}
-                  >
-                    🗓️
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#2a3a2a" }}>
-                      {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedSaved(p);
+                      setScreen("savedProgram");
+                    }
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 12,
+                        background: "#f0f7f2",
+                        border: "1px solid #c8e0cc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 18,
+                      }}
+                    >
+                      🗓️
                     </div>
-                    <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
-                      タップして詳細
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#2a3a2a" }}>
+                        {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#7a8a7a", marginTop: 2 }}>
+                        タップして詳細
+                      </div>
                     </div>
+                    <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
                   </div>
-                  <div style={{ fontSize: 18, color: "#ccc" }}>›</div>
                 </div>
-              </div>
-            ))}
+              ))}
+              {!savedHistoryExpanded && selectedChildHistory.length > 10 && (
+                <button
+                  type="button"
+                  onClick={() => setSavedHistoryExpanded(true)}
+                  style={{
+                    ...s.btn,
+                    marginTop: 4,
+                    background: "transparent",
+                    color: "#2d5a3d",
+                    border: "2px solid #c8e0cc",
+                  }}
+                >
+                  もっと見る（全{selectedChildHistory.length}件）
+                </button>
+              )}
+            </>
           </div>
         )}
 
@@ -3706,6 +3963,30 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {saveToastVisible && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            bottom: 28,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 200,
+            background: "#2d5a3d",
+            color: "#fff",
+            padding: "12px 28px",
+            borderRadius: 14,
+            fontSize: 14,
+            fontWeight: 700,
+            boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
+            pointerEvents: "none",
+          }}
+        >
+          保存しました✓
+        </div>
+      )}
 
       {/* 印刷専用（@media print でこの領域だけ表示） */}
       <div className="print-area" aria-hidden="true">
