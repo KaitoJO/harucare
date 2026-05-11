@@ -35,7 +35,9 @@
 
    これで `children`・`saved_programs`・`support_records`・`saved_support_diaries`・`saved_parent_contacts`・`plan_feedbacks`・`program_edit_feedback` が作成され、各テーブルに RLS が有効になります。
 
-3. エラーが出た場合は、メッセージ全文を確認してください（既にテーブルがある場合は `DROP TABLE` が必要になることがあります。本番ではマイグレーション管理を推奨します）。
+3. **既に 001 だけ実行済み**の場合は、続けて `supabase/migrations/002_saved_support_diaries_entry_date.sql` を実行してください（支援日誌の日付グループ用の `entry_date` 列）。
+
+4. エラーが出た場合は、メッセージ全文を確認してください（既にテーブルがある場合は `DROP TABLE` が必要になることがあります。本番ではマイグレーション管理を推奨します）。
 
 ## 4. 認証（メール＋パスワード）の設定
 

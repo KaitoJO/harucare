@@ -202,6 +202,50 @@ function todayYyyyMmDd() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isoDateFromCreatedAt(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  } catch {
+    return "";
+  }
+}
+
+function formatJaTimeHm(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString("ja-JP", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return "";
+  }
+}
+
+function diaryRecordDateKey(d) {
+  const raw = d?.date != null ? String(d.date).trim() : "";
+  return raw || isoDateFromCreatedAt(d.createdAt);
+}
+
+function diaryActivitySummary(d) {
+  const a = d.sourceInputs?.activity;
+  if (a && String(a).trim()) return String(a).trim().replace(/\s+/g, " ");
+  const text = String(d.programText ?? "");
+  const line = text.split("\n").find((x) => x.trim().length > 0);
+  return line ? line.trim().replace(/^#+\s*/, "").replace(/\*\*/g, "") : "（活動内容なし）";
+}
+
+function diaryOneLineActivity(d) {
+  const s = diaryActivitySummary(d);
+  const max = 52;
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
 function getLatestPlanFeedbackForProgram(feedbacks, childId, programText) {
   const cid = String(childId);
   for (let i = feedbacks.length - 1; i >= 0; i -= 1) {
@@ -1039,6 +1083,8 @@ export default function App() {
   const [detailDiaryListExpanded, setDetailDiaryListExpanded] = useState(false);
   const [detailContactListExpanded, setDetailContactListExpanded] =
     useState(false);
+  const [diaryAccordionOpenDate, setDiaryAccordionOpenDate] = useState(null);
+  const [diaryDetailOpenId, setDiaryDetailOpenId] = useState(null);
   const [savedListExpanded, setSavedListExpanded] = useState(false);
   const [savedHistoryExpanded, setSavedHistoryExpanded] = useState(false);
   const [saveToastVisible, setSaveToastVisible] = useState(false);
@@ -1182,6 +1228,8 @@ export default function App() {
       setDetailPlanListExpanded(false);
       setDetailDiaryListExpanded(false);
       setDetailContactListExpanded(false);
+      setDiaryAccordionOpenDate(null);
+      setDiaryDetailOpenId(null);
       setError(null);
     });
   }, [selectedChild?.id]);
@@ -1243,6 +1291,34 @@ export default function App() {
       .slice()
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   }, [savedSupportDiaries, selectedChild]);
+
+  const supportDiaryVisibleList = useMemo(() => {
+    const full = selectedSavedSupportDiaries;
+    return detailDiaryListExpanded ? full : full.slice(0, 10);
+  }, [selectedSavedSupportDiaries, detailDiaryListExpanded]);
+
+  const supportDiaryGroupsByDate = useMemo(() => {
+    const map = new Map();
+    for (const d of supportDiaryVisibleList) {
+      const key = diaryRecordDateKey(d);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(d);
+    }
+    for (const items of map.values()) {
+      items.sort((a, b) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+      );
+    }
+    return Array.from(map.entries())
+      .map(([date, items]) => ({
+        date,
+        dateLabel: formatJaDate(date),
+        items,
+        count: items.length,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [supportDiaryVisibleList]);
 
   const selectedSavedParentContacts = useMemo(() => {
     if (!selectedChild?.name) return [];
@@ -1533,6 +1609,7 @@ export default function App() {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
       childName: selectedChild.name,
       childId: selectedChild.id ?? null,
+      date: todayYyyyMmDd(),
       createdAt,
       createdAtLabel: formatJaDateTime(createdAt),
       programText: supportDiaryOutput.trim(),
@@ -2979,30 +3056,205 @@ export default function App() {
                     </div>
                   ) : (
                     <>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {(detailDiaryListExpanded
-                          ? selectedSavedSupportDiaries
-                          : selectedSavedSupportDiaries.slice(0, 10)
-                        ).map((p) => (
-                          <div
-                            key={p.id}
-                            style={{
-                              border: "1px solid #e0eae0",
-                              borderRadius: 12,
-                              padding: "12px 12px",
-                              background: "#fafcfa",
-                              maxHeight: 280,
-                              overflow: "auto",
-                            }}
-                          >
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {supportDiaryGroupsByDate.map((g) => {
+                          const open = diaryAccordionOpenDate === g.date;
+                          return (
                             <div
-                              style={{ fontSize: 12, fontWeight: 700, color: "#2a3a2a", marginBottom: 8 }}
+                              key={g.date}
+                              style={{
+                                border: "1px solid #e0eae0",
+                                borderRadius: 12,
+                                overflow: "hidden",
+                                background: "#fafcfa",
+                              }}
                             >
-                              {p.createdAtLabel || formatJaDateTime(p.createdAt)}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDiaryAccordionOpenDate((prev) =>
+                                    prev === g.date ? null : g.date,
+                                  );
+                                  setDiaryDetailOpenId(null);
+                                }}
+                                style={{
+                                  width: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 10,
+                                  padding: "12px 14px",
+                                  border: "none",
+                                  background: open ? "#eef5ef" : "#fafcfa",
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                  textAlign: "left",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    color: "#2a3a2a",
+                                  }}
+                                >
+                                  {g.dateLabel} · {g.count}件
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 14,
+                                    color: "#7a8a7a",
+                                    transform: open ? "rotate(90deg)" : "none",
+                                    transition: "transform 0.15s ease",
+                                  }}
+                                >
+                                  ›
+                                </span>
+                              </button>
+                              {open && (
+                                <div
+                                  style={{
+                                    borderTop: "1px solid #e8eee8",
+                                    padding: "4px 0 8px",
+                                  }}
+                                >
+                                  {g.items.map((p) => {
+                                    const timeLabel = formatJaTimeHm(p.createdAt);
+                                    const line = diaryOneLineActivity(p);
+                                    const detailOpen = diaryDetailOpenId === p.id;
+                                    const appearance =
+                                      p.sourceInputs?.appearance?.trim() || "";
+                                    const concerns =
+                                      p.sourceInputs?.concerns?.trim() || "";
+                                    return (
+                                      <div
+                                        key={p.id}
+                                        style={{
+                                          borderBottom: "1px solid #f0f4f0",
+                                        }}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setDiaryDetailOpenId((id) =>
+                                              id === p.id ? null : p.id,
+                                            )
+                                          }
+                                          style={{
+                                            width: "100%",
+                                            display: "flex",
+                                            alignItems: "baseline",
+                                            gap: 10,
+                                            padding: "10px 14px",
+                                            border: "none",
+                                            background: "transparent",
+                                            cursor: "pointer",
+                                            fontFamily: "inherit",
+                                            textAlign: "left",
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: 12,
+                                              fontWeight: 700,
+                                              color: "#2d5a3d",
+                                              flex: "0 0 auto",
+                                              minWidth: 52,
+                                            }}
+                                          >
+                                            {timeLabel}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: 12,
+                                              color: "#2a3a2a",
+                                              lineHeight: 1.5,
+                                              flex: 1,
+                                            }}
+                                          >
+                                            {line}
+                                          </span>
+                                        </button>
+                                        {detailOpen && (
+                                          <div
+                                            style={{
+                                              padding: "0 14px 12px 76px",
+                                              fontSize: 12,
+                                              color: "#2a3a2a",
+                                              lineHeight: 1.65,
+                                            }}
+                                          >
+                                            <div style={{ marginBottom: 10 }}>
+                                              <span
+                                                style={{
+                                                  fontSize: 10,
+                                                  fontWeight: 700,
+                                                  color: "#7a8a7a",
+                                                  letterSpacing: "0.08em",
+                                                }}
+                                              >
+                                                本日の様子
+                                              </span>
+                                              <div style={{ marginTop: 4 }}>
+                                                {appearance || (
+                                                  <span style={{ color: "#9a9a9a" }}>
+                                                    （入力なし）
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div style={{ marginBottom: 10 }}>
+                                              <span
+                                                style={{
+                                                  fontSize: 10,
+                                                  fontWeight: 700,
+                                                  color: "#7a8a7a",
+                                                  letterSpacing: "0.08em",
+                                                }}
+                                              >
+                                                フォロー方針・気になった点
+                                              </span>
+                                              <div style={{ marginTop: 4 }}>
+                                                {concerns || (
+                                                  <span style={{ color: "#9a9a9a" }}>
+                                                    （入力なし）
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            {!appearance && !concerns && p.programText?.trim() && (
+                                              <div
+                                                style={{
+                                                  marginTop: 4,
+                                                  padding: "10px 12px",
+                                                  borderRadius: 10,
+                                                  background: "#fff",
+                                                  border: "1px solid #e8eee8",
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    color: "#7a8a7a",
+                                                    marginBottom: 6,
+                                                  }}
+                                                >
+                                                  AI整形の全文
+                                                </div>
+                                                <ProgramMarkdown text={p.programText} />
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                            <ProgramMarkdown text={p.programText} />
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       {!detailDiaryListExpanded &&
                         selectedSavedSupportDiaries.length > 10 && (

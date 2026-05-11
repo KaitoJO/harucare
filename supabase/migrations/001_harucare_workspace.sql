@@ -66,6 +66,7 @@ create table public.saved_support_diaries (
   user_id uuid not null references auth.users (id) on delete cascade,
   child_id uuid references public.children (id) on delete cascade,
   child_name text not null,
+  entry_date text,
   created_at timestamptz not null,
   created_at_label text,
   program_text text not null,

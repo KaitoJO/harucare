@@ -43,11 +43,26 @@ function supportRecordFromRow(r) {
   };
 }
 
+function isoDateFromDbTimestamp(ts) {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  } catch {
+    return "";
+  }
+}
+
 function diaryFromRow(r) {
+  const dateRaw = r.entry_date != null ? String(r.entry_date).trim() : "";
   return {
     id: r.id,
     childName: r.child_name,
     childId: r.child_id ?? null,
+    date: dateRaw || isoDateFromDbTimestamp(r.created_at),
     createdAt: r.created_at,
     createdAtLabel: r.created_at_label ?? "",
     programText: r.program_text,
@@ -229,6 +244,7 @@ export async function insertSavedSupportDiary(supabase, userId, entry) {
     user_id: userId,
     child_id: entry.childId ?? null,
     child_name: entry.childName,
+    entry_date: entry.date ?? null,
     created_at: entry.createdAt,
     created_at_label: entry.createdAtLabel,
     program_text: entry.programText,
