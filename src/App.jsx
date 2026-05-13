@@ -5,6 +5,7 @@ import remarkBreaks from "remark-breaks";
 import { exportSupportPlanPdf, supportPlanPdfFilename } from "./exportSupportPlanPdf.js";
 import { getSupabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
 import * as workspaceDb from "./lib/workspaceDb.js";
+import { captureGeneration, captureEdit } from "./services/learningLog.js";
 import AuthScreen from "./AuthScreen.jsx";
 
 const DISABILITY_TYPES = [
@@ -1154,6 +1155,8 @@ export default function App() {
   const [programAiOriginal, setProgramAiOriginal] = useState("");
   const [programEditMode, setProgramEditMode] = useState(false);
   const [programEditSnapshot, setProgramEditSnapshot] = useState("");
+  // 学習ループ Phase 0: support_plans 行 ID（編集差分のキャプチャに利用）
+  const [planLogId, setPlanLogId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -1629,6 +1632,7 @@ export default function App() {
     setProgramAiOriginal("");
     setProgramEditMode(false);
     setProgramEditSnapshot("");
+    setPlanLogId(null);
     setLoading(true);
     setScreen("program");
     try {
@@ -1636,6 +1640,17 @@ export default function App() {
       setGeneratedProgram(text);
       setProgramAiOriginal(text);
       setGeneratedAtIso(new Date().toISOString());
+      // 学習ループ Phase 0: 生成直後に support_plans へキャプチャ。
+      // fire-and-forget。失敗しても UI は止めない。
+      // Phase 0 は 1 施設 = 1 アカウント想定で facility_id に user.id を流用。
+      const logId = await captureGeneration({
+        supabase,
+        child: selectedChild,
+        aiOutput: text,
+        facilityId: session.user.id,
+        userId: session.user.id,
+      });
+      setPlanLogId(logId);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setScreen("detail");
@@ -1659,6 +1674,16 @@ export default function App() {
       showSaveToast();
     } catch {
       /* 保存失敗しても編集モードは終了させる */
+    }
+    // 学習ループ Phase 0: support_plans.final_output / edited を更新。
+    // 既存の program_edit_feedback への保存と二重で記録するが、
+    // support_plans 側は disability/severity/age タグ付きで集計しやすいため両方残す。
+    if (planLogId) {
+      await captureEdit({
+        supabase,
+        planId: planLogId,
+        finalOutput: edited,
+      });
     }
     setProgramEditMode(false);
   };
