@@ -25,7 +25,17 @@ export const SUPPORT_PLAN_PDF_CSS = `
   overflow-wrap: break-word;
   white-space: normal;
   vertical-align: top;
-  padding: 5px 7px;
+  padding: 6px 8px;
+}
+.hc-support-plan .hc-detail-table th,
+.hc-support-plan .hc-detail-table td {
+  vertical-align: top;
+  padding: 6px 8px;
+  word-break: normal;
+  white-space: normal;
+}
+.hc-support-plan .hc-detail-table .hc-cell-pre {
+  white-space: pre-line;
 }
 .hc-support-plan .hc-cell-pre {
   white-space: pre-line;
@@ -44,6 +54,27 @@ export const SUPPORT_PLAN_PDF_CSS = `
     size: A4 portrait;
     margin: 8mm;
   }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  h2,
+  h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  table {
+    page-break-inside: auto;
+    break-inside: auto;
+  }
   .hc-support-plan {
     font-size: 8.5pt;
   }
@@ -52,6 +83,11 @@ export const SUPPORT_PLAN_PDF_CSS = `
   }
   .hc-support-plan tr.hc-avoid-split {
     page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .hc-support-plan .hc-label {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 `;

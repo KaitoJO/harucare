@@ -10,15 +10,23 @@ const PAGE_W_MM = 194;
 
 const FW = PDF_FW;
 
-/** 告示様式：支援目標等（4列） */
-const OFFICIAL_DETAIL_COLGROUP = (
+/** 支援目標及び具体的な支援内容（6列） */
+const DETAIL_TABLE_COLGROUP = (
   <colgroup>
-    <col style={{ width: "12%" }} />
-    <col style={{ width: "28%" }} />
-    <col style={{ width: "50%" }} />
     <col style={{ width: "10%" }} />
+    <col style={{ width: "25%" }} />
+    <col style={{ width: "45%" }} />
+    <col style={{ width: "8%" }} />
+    <col style={{ width: "7%" }} />
+    <col style={{ width: "5%" }} />
   </colgroup>
 );
+
+const detailCellStyle = {
+  verticalAlign: "top",
+  padding: "6px 8px",
+  wordBreak: "normal",
+};
 
 function tableStyle(extra = {}) {
   return {
@@ -37,28 +45,34 @@ function PdfStylesheet() {
   return <style id={SUPPORT_PLAN_PDF_STYLE_ID}>{SUPPORT_PLAN_PDF_CSS}</style>;
 }
 
-function renderOfficialDetailHead() {
+function renderDetailTableHead() {
   return (
     <thead>
       <tr className="hc-avoid-split">
-        <th className="hc-cell hc-label" style={{ textAlign: "center" }}>
-          項目
+        <th className="hc-cell hc-label" style={{ ...detailCellStyle, textAlign: "center" }}>
+          {"項目\n（本人支援等）"}
         </th>
-        <th className="hc-cell hc-label">
+        <th className="hc-cell hc-label" style={detailCellStyle}>
           {"支援目標\n（具体的な到達目標）"}
         </th>
-        <th className="hc-cell hc-label">
+        <th className="hc-cell hc-label" style={detailCellStyle}>
           {"支援内容\n（内容・支援の提供上のポイント・5領域）"}
         </th>
-        <th className="hc-cell hc-label" style={{ textAlign: "center" }}>
+        <th className="hc-cell hc-label" style={{ ...detailCellStyle, textAlign: "center" }}>
+          期間
+        </th>
+        <th className="hc-cell hc-label" style={{ ...detailCellStyle, textAlign: "center" }}>
           優先順位
+        </th>
+        <th className="hc-cell hc-label" style={{ ...detailCellStyle, textAlign: "center" }}>
+          留意事項
         </th>
       </tr>
     </thead>
   );
 }
 
-function renderOfficialDetailRow(row, categoryCell, rowKey) {
+function renderDetailTableRow(row, categoryCell, rowKey) {
   if (!row) return null;
   const dom = pdfOneLine(row.domain ?? "");
   const goalOnly = pdfBlock(row.supportTarget ?? "");
@@ -68,10 +82,20 @@ function renderOfficialDetailRow(row, categoryCell, rowKey) {
   return (
     <tr key={rowKey}>
       {categoryCell}
-      <td className="hc-cell hc-cell-pre">{goalText || "—"}</td>
-      <td className="hc-cell hc-cell-pre">{contentOnly || "—"}</td>
-      <td className="hc-cell" style={{ textAlign: "center" }}>
+      <td className="hc-cell hc-cell-pre" style={detailCellStyle}>
+        {goalText || "—"}
+      </td>
+      <td className="hc-cell hc-cell-pre" style={detailCellStyle}>
+        {contentOnly || "—"}
+      </td>
+      <td className="hc-cell hc-cell-pre" style={{ ...detailCellStyle, textAlign: "center" }}>
+        {pdfBlock(row.period ?? "—")}
+      </td>
+      <td className="hc-cell" style={{ ...detailCellStyle, textAlign: "center" }}>
         {pdfOneLine(row.priority ?? "—")}
+      </td>
+      <td className="hc-cell hc-cell-pre" style={detailCellStyle}>
+        {pdfBlock(row.notes ?? "") || "—"}
       </td>
     </tr>
   );
@@ -118,6 +142,7 @@ export function FormalSupportPlanPdfMount({ doc }) {
             "'Noto Sans JP', 'MS PGothic', 'Hiragino Kaku Gothic ProN', sans-serif",
         }}
       >
+        <div className="section">
         <table cellPadding={0} cellSpacing={0} style={tableStyle({ marginBottom: 4 })}>
           <tbody>
             <tr className="hc-avoid-split">
@@ -147,7 +172,9 @@ export function FormalSupportPlanPdfMount({ doc }) {
             </tr>
           </tbody>
         </table>
+        </div>
 
+        <div className="section">
         <table cellPadding={0} cellSpacing={0} style={tableStyle({ marginBottom: 4 })}>
           <colgroup>
             <col style={{ width: "18%" }} />
@@ -213,7 +240,9 @@ export function FormalSupportPlanPdfMount({ doc }) {
             </tr>
           </tbody>
         </table>
+        </div>
 
+        <div className="section">
         <div
           className="hc-section-header"
           style={{ fontWeight: 700, margin: "3px 0 4px", paddingLeft: 2 }}
@@ -221,21 +250,26 @@ export function FormalSupportPlanPdfMount({ doc }) {
           ○支援目標及び具体的な支援内容
         </div>
 
-        <table cellPadding={0} cellSpacing={0} style={tableStyle({ marginBottom: 4 })}>
-          {OFFICIAL_DETAIL_COLGROUP}
-          {renderOfficialDetailHead()}
+        <table
+          className="hc-detail-table"
+          cellPadding={0}
+          cellSpacing={0}
+          style={tableStyle({ marginBottom: 4 })}
+        >
+          {DETAIL_TABLE_COLGROUP}
+          {renderDetailTableHead()}
           <tbody>
             {domainRows.map((row, i) =>
-              renderOfficialDetailRow(
+              renderDetailTableRow(
                 row,
                 i === 0 ? (
                   <td
                     rowSpan={domainCount}
                     className="hc-cell"
                     style={{
+                      ...detailCellStyle,
                       textAlign: "center",
                       fontWeight: 700,
-                      verticalAlign: "middle",
                     }}
                   >
                     本人支援
@@ -245,14 +279,14 @@ export function FormalSupportPlanPdfMount({ doc }) {
               ),
             )}
             {ancillaryRows.map((row, i) =>
-              renderOfficialDetailRow(
+              renderDetailTableRow(
                 row,
                 <td
                   className="hc-cell"
                   style={{
+                    ...detailCellStyle,
                     textAlign: "center",
                     fontWeight: 700,
-                    verticalAlign: "middle",
                   }}
                 >
                   {pdfOneLine(row.category ?? "")}
@@ -260,6 +294,47 @@ export function FormalSupportPlanPdfMount({ doc }) {
                 `anc-${String(i)}`,
               ),
             )}
+          </tbody>
+        </table>
+        </div>
+
+        <div className="section">
+        <table
+          cellPadding={0}
+          cellSpacing={0}
+          style={tableStyle({ marginBottom: 4 })}
+        >
+          <colgroup>
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "78%" }} />
+          </colgroup>
+          <tbody>
+            <tr className="hc-avoid-split">
+              <th className="hc-cell hc-label">
+                {"サービス提供時間\n（曜日・時間）"}
+              </th>
+              <td className="hc-cell hc-cell-pre">
+                {pdfBlock(d.serviceTimeDetail ?? "")}
+              </td>
+            </tr>
+            <tr className="hc-avoid-split">
+              <th className="hc-cell hc-label">身体拘束等について</th>
+              <td className="hc-cell hc-cell-pre">
+                {pdfBlock(d.physicalRestraintNote ?? "")}
+              </td>
+            </tr>
+            <tr className="hc-avoid-split">
+              <th className="hc-cell hc-label">相談支援加算等</th>
+              <td className="hc-cell hc-cell-pre">
+                {pdfBlock(d.consultationSupportAddition ?? "")}
+              </td>
+            </tr>
+            <tr className="hc-avoid-split">
+              <th className="hc-cell hc-label">留意点・備考</th>
+              <td className="hc-cell hc-cell-pre">
+                {pdfBlock(d.remarksNotes ?? "")}
+              </td>
+            </tr>
           </tbody>
         </table>
 
@@ -280,7 +355,9 @@ export function FormalSupportPlanPdfMount({ doc }) {
               <th className="hc-cell hc-label" style={{ width: "32%" }}>
                 児童発達支援管理責任者氏名
               </th>
-              <td className="hc-cell" style={{ width: "38%" }} />
+              <td className="hc-cell" style={{ width: "38%" }}>
+                {pdfOneLine(d.managerName ?? "")}
+              </td>
               <td className="hc-cell" style={{ width: "30%", textAlign: "right" }}>
                 {`${FW.repeat(4)}年${FW.repeat(2)}月${FW.repeat(2)}日`}
                 {"\n"}
@@ -289,6 +366,7 @@ export function FormalSupportPlanPdfMount({ doc }) {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );

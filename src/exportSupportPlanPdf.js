@@ -146,6 +146,53 @@ function shrinkSliceAvoidingBands(
   return Math.min(e, tentativeEnd, canvasBottom);
 }
 
+/**
+ * html2canvas 画像を A4 余白付きで何ページに分割するか（export と同じロジック）
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} [marginMm]
+ * @param {{ avoidBandsSorted?: { top: number, bottom: number }[], pageBreakAnchorsSorted?: number[] }} [opts]
+ */
+export function countPdfPagesFromCanvas(canvas, marginMm = 8, opts = {}) {
+  const pageW = 210;
+  const pageH = 297;
+  const imgWMm = pageW - 2 * marginMm;
+  const bodyHMm = pageH - 2 * marginMm;
+  const pxPerMm = canvas.width / imgWMm;
+  const maxPx = Math.ceil(bodyHMm * pxPerMm);
+  const bands = opts?.avoidBandsSorted ?? [];
+  const pageBreakAnchors = opts?.pageBreakAnchorsSorted ?? [];
+
+  let srcY = 0;
+  let pages = 0;
+  while (srcY < canvas.height) {
+    pages += 1;
+    const desiredEnd = Math.min(srcY + maxPx, canvas.height);
+    let sliceEndPx =
+      bands.length === 0
+        ? desiredEnd
+        : shrinkSliceAvoidingBands(
+            srcY,
+            desiredEnd,
+            bands,
+            maxPx,
+            canvas.height,
+          );
+    sliceEndPx = snapSliceToPageBreak(
+      srcY,
+      sliceEndPx,
+      pageBreakAnchors,
+      maxPx,
+    );
+    if (sliceEndPx <= srcY) {
+      sliceEndPx = Math.min(canvas.height, srcY + maxPx);
+    }
+    sliceEndPx = Math.min(sliceEndPx, canvas.height);
+    const slicePx = Math.max(sliceEndPx - srcY, 16);
+    srcY += slicePx;
+  }
+  return pages;
+}
+
 function addPagedCanvasToPdf(doc, canvas, marginMm, opts) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
