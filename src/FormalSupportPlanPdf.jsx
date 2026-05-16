@@ -103,22 +103,15 @@ export function FormalSupportPlanPdfMount({ doc }) {
               </tr>
               <tr className="hc-avoid-split hc-long-term-goal-row">
                 <th className="hc-label">{"長期目標\n（内容・期間等）"}</th>
-                <td className="hc-text-block">
+                <td colSpan={2} className="hc-text-block">
                   【内容】{toPdfBlock(d.longTermGoal?.content)}
                   {"\n"}
                   【期間等】{toPdfBlock(d.longTermGoal?.period)}
                 </td>
-                <td rowSpan={2} className="hc-text-block">
-                  <strong>支援の標準的な提供時間等</strong>
-                  {"\n"}
-                  （月別スケジュール）
-                  {"\n"}
-                  {toPdfBlock(d.monthlySchedule)}
-                </td>
               </tr>
               <tr className="hc-avoid-split hc-short-term-goal-row">
                 <th className="hc-label">{"短期目標\n（内容・期間等）"}</th>
-                <td className="hc-text-block">
+                <td colSpan={2} className="hc-text-block">
                   {shortTermGoals.slice(0, 6).map((goal, index) => (
                     <div key={`st-${String(index)}`}>
                       {index > 0 ? "\n" : ""}
@@ -131,6 +124,21 @@ export function FormalSupportPlanPdfMount({ doc }) {
                       ) : null}
                     </div>
                   ))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section className="section">
+          <table className="hc-table">
+            <tbody>
+              <tr className="hc-avoid-split">
+                <th className="hc-label">
+                  {"支援の標準的な提供時間等\n（月別スケジュール）"}
+                </th>
+                <td colSpan={2} className="hc-text-block">
+                  {toPdfBlock(d.monthlySchedule)}
                 </td>
               </tr>
             </tbody>
