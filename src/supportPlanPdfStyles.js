@@ -97,6 +97,17 @@ export const SUPPORT_PLAN_PDF_CSS = `
   break-inside: avoid;
 }
 
+.hc-support-plan tr.hc-long-term-goal-row {
+  page-break-inside: avoid;
+  page-break-before: auto;
+  break-inside: avoid;
+}
+
+.hc-support-plan tr.hc-short-term-goal-row {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
 .hc-support-plan .section {
   page-break-inside: avoid;
   break-inside: avoid;
@@ -150,6 +161,17 @@ export const SUPPORT_PLAN_PDF_CSS = `
   .hc-support-plan .hc-label {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .hc-support-plan tr.hc-long-term-goal-row {
+    page-break-inside: avoid;
+    page-break-before: auto;
+    break-inside: avoid;
+  }
+
+  .hc-support-plan tr.hc-short-term-goal-row {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
 `;

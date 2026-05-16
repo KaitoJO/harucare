@@ -101,7 +101,7 @@ export function FormalSupportPlanPdfMount({ doc }) {
                   {toPdfBlock(d.comprehensivePolicy)}
                 </td>
               </tr>
-              <tr className="hc-avoid-split">
+              <tr className="hc-avoid-split hc-long-term-goal-row">
                 <th className="hc-label">{"長期目標\n（内容・期間等）"}</th>
                 <td className="hc-text-block">
                   【内容】{toPdfBlock(d.longTermGoal?.content)}
@@ -116,7 +116,7 @@ export function FormalSupportPlanPdfMount({ doc }) {
                   {toPdfBlock(d.monthlySchedule)}
                 </td>
               </tr>
-              <tr className="hc-avoid-split">
+              <tr className="hc-avoid-split hc-short-term-goal-row">
                 <th className="hc-label">{"短期目標\n（内容・期間等）"}</th>
                 <td className="hc-text-block">
                   {shortTermGoals.slice(0, 6).map((goal, index) => (
