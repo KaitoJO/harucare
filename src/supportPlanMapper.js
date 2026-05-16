@@ -98,15 +98,6 @@ function extractShortTermGoals(sectionText) {
   }));
 }
 
-function formatMonthlySchedule(sectionText) {
-  const bullets = bulletsFromText(sectionText);
-  if (!bullets.length) return toPdfBlock(sectionText).slice(0, 1400);
-  return bullets
-    .map((line, i) => `・${i + 1}か月目：${line}`)
-    .join("\n")
-    .slice(0, 1400);
-}
-
 function distributeToDomains(bullets) {
   const buckets = SUPPORT_DOMAINS.map(() => /** @type {string[]} */ ([]));
   bullets.forEach((bullet, idx) => {
@@ -185,9 +176,23 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
     pickSection(sections, "短期目標"),
   );
   const goalBodies = shortTermGoals.map((g) => g.content);
-  const monthlySchedule = formatMonthlySchedule(
-    pickSection(sections, "月ごと", "活動計画"),
-  );
+  const monthlySectionKey =
+    Object.keys(sections).find(
+      (k) => k.includes("月ごと") && k.includes("活動"),
+    ) ?? Object.keys(sections).find((k) => k.includes("月ごと"));
+  const monthlySectionRaw = monthlySectionKey
+    ? sections[monthlySectionKey]
+    : pickSection(sections, "月ごとの活動計画", "月ごと");
+  console.log("[buildFormalPlanDocument] 支援の標準的な提供時間等（月別スケジュール）", {
+    dataSource: "programText の ## 月ごと セクション（画面の Markdown 表示と同じ）",
+    sectionKey: monthlySectionKey ?? "(fallback pickSection)",
+    sectionHeadingKeys: Object.keys(sections),
+    rawCharLength: String(monthlySectionRaw).length,
+    oldBulletCount: bulletsFromText(monthlySectionRaw).length,
+    rawPreview: String(monthlySectionRaw).slice(0, 400),
+  });
+  /** 画面表示と同じセクション本文をそのまま使用（箇条書きの再番号付けはしない） */
+  const monthlySchedule = toPdfBlock(monthlySectionRaw);
   const supportBullets = bulletsFromText(
     pickSection(sections, "支援のポイント", "ポイント"),
   );
