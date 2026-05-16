@@ -7,6 +7,7 @@
  *   familyLifeIntentions?: string,
  *   standardSupportProvision?: string,
  *   managerName?: string,
+ *   facilityName?: string,
  *   disability?: string,
  *   goals?: string,
  *   notes?: string,
@@ -572,6 +573,13 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
     domainsContent,
   );
 
+  const defaultSupportPeriod = "6か月";
+  const goalStartDateJp = formatPlanCreationDateJp(planCreatedIso);
+  const providerLine = child?.managerName?.trim()
+    ? `児童発達支援事業所 児童指導員・児発管（${String(child.managerName).trim()}）`
+    : "児童発達支援事業所 児童指導員・管理責任者";
+  const notesForRemarks = truncatePlain(String(child?.notes ?? ""), 1200);
+
   const domainRows = SUPPORT_DOMAINS.map((domainLabel, i) => ({
     category: "本人支援",
     domain: domainLabel,
@@ -580,6 +588,9 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
       domainsContent[i]?.join("\n") ||
       `${domainLabel}の観点で、観察に基づき援助内容および環境・声かけ等の調整を活動過程へ反映すること。`,
     priority: `${i + 1}`,
+    period: defaultSupportPeriod,
+    notes: i === 0 ? notesForRemarks.slice(0, 320) : "",
+    provider: providerLine,
   }));
 
   const cn = String(child?.childName ?? child?.name ?? "").trim();
@@ -595,6 +606,9 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
       "関係機関との情報共有および必要時の協議・調整を通じて、一体的支援の質を確保すること。",
     supportContent: synthesizeRegionalBody(familyAi, issueBackground, cn),
     priority: "—",
+    period: defaultSupportPeriod,
+    notes: "",
+    provider: providerLine,
   };
 
   const famGoal =
@@ -619,6 +633,9 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
       famBodyPieces.filter(Boolean).join("\n\n").trim() ||
       truncatePlain(familyIntentions, 1200),
     priority: "—",
+    period: defaultSupportPeriod,
+    notes: "",
+    provider: providerLine,
   };
 
   const provisionSynth = synthesizeProvisionText(sections);
@@ -635,12 +652,18 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
       : `${cn ? `${cn}さん` : "本人"}について、異動・就学などの環境転換がある場合には準備と関係調整を内容に組み込み、当面の転換見込みがない場合にも継続的な安定支援の根拠を残す運用として記録する。`;
 
   return {
+    formatId: "harucare-v1",
     titleLine: "個別支援計画書",
+    subtitleLine: "《原案》",
+    planPeriodLabel: "第1期",
+    goalStartDateJp,
+    defaultSupportPeriod,
 
     footerExplainer:
       "提供する支援内容について、本計画書に基づき説明しました。",
 
     childName: cn,
+    facilityName: String(child?.facilityName ?? "").trim(),
     birthDateDisplay: formatBirthDateJp(child?.birthDate ?? ""),
     ageDisplay:
       String(child?.age ?? "").trim()
@@ -673,9 +696,17 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
         "異動や就学準備への段階的つながりを確保し、環境転換における情報共有と協働により本人の適応支援を進めること。",
       supportContent: transitionSupportContent,
       priority: "—",
+      period: defaultSupportPeriod,
+      notes: "",
+      provider: providerLine,
     },
 
     standardProvision,
+    serviceTimeDetail: [standardProvision, `【提供体制】${providerLine}`]
+      .filter(Boolean)
+      .join("\n\n"),
+    remarksNotes: notesForRemarks,
+    guardianOpinion: "特になし",
 
     managerName: String(child?.managerName ?? "").trim(),
 
@@ -683,6 +714,6 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
       "",
     footerNote: PLAN_FORM_FOOTNOTE,
     rawMarkdown: programText ?? "",
-    version: "hc-formal-plan-v2",
+    version: "hc-harucare-plan-v1",
   };
 }

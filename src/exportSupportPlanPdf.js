@@ -38,6 +38,48 @@ function collectAvoidBandsInCanvasSpace(root, canvas, opts) {
 }
 
 /**
+ * HaruCare 2ページ構成の改ページアンカー（canvas Y 昇順）
+ */
+function collectPageBreakAnchors(root, canvas) {
+  const rootEl = root;
+  const rootRect = rootEl.getBoundingClientRect();
+  const scrollH = Math.max(
+    rootEl.scrollHeight,
+    rootEl.offsetHeight,
+    rootRect.height,
+  );
+  const scaleY = scrollH > 0 ? canvas.height / scrollH : 1;
+  /** @type {number[]} */
+  const anchors = [];
+  rootEl.querySelectorAll("[data-pdf-page-break]").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    const r = node.getBoundingClientRect();
+    const topRel = r.top - rootRect.top + rootEl.scrollTop;
+    anchors.push(topRel * scaleY);
+  });
+  return anchors.filter((y) => y > 8).sort((a, b) => a - b);
+}
+
+/**
+ * 2ページ目直前など、優先改ページ位置へスライス端を寄せる
+ */
+function snapSliceToPageBreak(srcY, tentativeEnd, anchors, maxPx) {
+  if (!anchors.length) return tentativeEnd;
+  const minAdvance = Math.min(
+    Math.max(64, Math.floor(maxPx * 0.07)),
+    Math.floor(maxPx * 0.28),
+  );
+  const windowPx = Math.floor(maxPx * 0.42);
+  const candidates = anchors.filter(
+    (a) => a > srcY + minAdvance && a <= tentativeEnd + windowPx,
+  );
+  if (!candidates.length) return tentativeEnd;
+  const anchor = candidates[candidates.length - 1];
+  if (tentativeEnd - anchor > windowPx) return tentativeEnd;
+  return Math.max(srcY + minAdvance, Math.floor(anchor));
+}
+
+/**
  * スライス [srcY, sliceEnd) が行帯の一部だけを含んでいれば true（分割が発生）
  */
 function bandSplitsSlice(srcY, sliceEnd, b) {
@@ -113,6 +155,7 @@ function addPagedCanvasToPdf(doc, canvas, marginMm, opts) {
 
   const maxPx = Math.ceil(bodyHMm * pxPerMm);
   const bands = opts?.avoidBandsSorted ?? [];
+  const pageBreakAnchors = opts?.pageBreakAnchorsSorted ?? [];
 
   let srcY = 0;
   while (srcY < canvas.height) {
@@ -127,6 +170,13 @@ function addPagedCanvasToPdf(doc, canvas, marginMm, opts) {
             maxPx,
             canvas.height,
           );
+
+    sliceEndPx = snapSliceToPageBreak(
+      srcY,
+      sliceEndPx,
+      pageBreakAnchors,
+      maxPx,
+    );
 
     if (sliceEndPx <= srcY) {
       sliceEndPx = Math.min(canvas.height, srcY + maxPx);
@@ -193,6 +243,7 @@ export async function exportSupportPlanPdf(element, filename, options = {}) {
   });
 
   const avoidBands = collectAvoidBandsInCanvasSpace(element, canvas, options);
+  const pageBreakAnchors = collectPageBreakAnchors(element, canvas);
 
   const doc = new jsPDF({
     unit: "mm",
@@ -200,7 +251,10 @@ export async function exportSupportPlanPdf(element, filename, options = {}) {
     orientation: "portrait",
     compress: true,
   });
-  addPagedCanvasToPdf(doc, canvas, 12, { avoidBandsSorted: avoidBands });
+  addPagedCanvasToPdf(doc, canvas, 12, {
+    avoidBandsSorted: avoidBands,
+    pageBreakAnchorsSorted: pageBreakAnchors,
+  });
   doc.save(filename);
 }
 
