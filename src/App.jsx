@@ -508,7 +508,10 @@ function ProgramMarkdown({ text }) {
   );
 }
 
-/** PDF 出力（厚労省略示に沿った個別支援計画様式レイアウト／html2canvas） */
+/**
+ * PDF 出力（様式レイアウト／html2canvas）
+ * AI API は呼ばない。mappedPlanSnapshot（画面・保存済みのマッピング結果）をそのまま印刷する。
+ */
 async function mountAndExportFormalSupportPlanPdf({
   mappedPlanSnapshot,
   childPayload,
@@ -1450,6 +1453,34 @@ export default function App() {
     );
   }, [planFeedbacks, selectedChild, generatedProgram]);
 
+  /** 画面上の generatedProgram から作った様式用データ（PDFはこれを印刷する。AIは呼ばない） */
+  const generatedMappedPlan = useMemo(() => {
+    if (!selectedChild || !generatedProgram.trim()) return null;
+    return buildFormalPlanDocument(
+      selectedChild,
+      generatedProgram,
+      generatedAtIso || new Date().toISOString(),
+    );
+  }, [selectedChild, generatedProgram, generatedAtIso]);
+
+  /** 保存済み計画の様式用データ（保存時の mappedPlan を優先。AIは呼ばない） */
+  const selectedSavedMappedPlan = useMemo(() => {
+    if (!selectedSaved?.programText?.trim()) return null;
+    if (selectedSaved.mappedPlan) return selectedSaved.mappedPlan;
+    const child =
+      children.find((c) => String(c.id) === String(selectedSaved.childId)) ||
+      children.find((c) => c.name === selectedSaved.childName);
+    return buildFormalPlanDocument(
+      {
+        ...(child || {}),
+        name: selectedSaved.childName,
+        childName: selectedSaved.childName,
+      },
+      selectedSaved.programText,
+      selectedSaved.createdAt || new Date().toISOString(),
+    );
+  }, [selectedSaved, children]);
+
   const recordPlanFeedback = useCallback(
     async (rating) => {
       if (!selectedChild || !generatedProgram.trim()) return;
@@ -1645,11 +1676,9 @@ export default function App() {
     if (!generatedProgram.trim()) return;
     if (!supabase || !session?.user?.id) return;
     const createdAt = generatedAtIso || new Date().toISOString();
-    const mappedPlan = buildFormalPlanDocument(
-      selectedChild,
-      generatedProgram,
-      createdAt,
-    );
+    const mappedPlan =
+      generatedMappedPlan ??
+      buildFormalPlanDocument(selectedChild, generatedProgram, createdAt);
     const entry = {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
       childName: selectedChild.name,
@@ -1787,11 +1816,11 @@ export default function App() {
   };
 
   const handleExportProgramPdf = useCallback(async () => {
-    if (!selectedChild || !generatedProgram.trim()) return;
+    if (!selectedChild || !generatedProgram.trim() || !generatedMappedPlan) return;
     setPdfBusy(true);
     try {
       await mountAndExportFormalSupportPlanPdf({
-        mappedPlanSnapshot: null,
+        mappedPlanSnapshot: generatedMappedPlan,
         childPayload: selectedChild,
         programText: generatedProgram,
         planCreatedIso: generatedAtIso || new Date().toISOString(),
@@ -1802,10 +1831,10 @@ export default function App() {
     } finally {
       setPdfBusy(false);
     }
-  }, [selectedChild, generatedProgram, generatedAtIso]);
+  }, [selectedChild, generatedProgram, generatedAtIso, generatedMappedPlan]);
 
   const handleExportSavedProgramPdf = useCallback(async () => {
-    if (!selectedSaved?.programText?.trim()) return;
+    if (!selectedSaved?.programText?.trim() || !selectedSavedMappedPlan) return;
     setPdfBusy(true);
     try {
       const child =
@@ -1813,7 +1842,7 @@ export default function App() {
         children.find((c) => c.name === selectedSaved.childName);
       const name = selectedSaved.childName;
       await mountAndExportFormalSupportPlanPdf({
-        mappedPlanSnapshot: selectedSaved.mappedPlan ?? null,
+        mappedPlanSnapshot: selectedSavedMappedPlan,
         childPayload: {
           ...(child || {}),
           name,
@@ -1828,7 +1857,7 @@ export default function App() {
     } finally {
       setPdfBusy(false);
     }
-  }, [selectedSaved, children]);
+  }, [selectedSaved, children, selectedSavedMappedPlan]);
 
   const handlePrint = ({ childName, iso, programText }) => {
     if (!programText?.trim()) return;
