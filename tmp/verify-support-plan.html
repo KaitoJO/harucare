@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" />
+  <style>
+.hc-support-plan,
+.hc-support-plan * {
+  box-sizing: border-box;
+}
+
+.hc-support-plan {
+  width: 194mm;
+  max-width: 194mm;
+  margin: 0;
+  padding: 0;
+  font-family: "Noto Sans JP", "MS PGothic", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 8.5pt;
+  line-height: 1.38;
+  color: #000;
+  background: #fff;
+}
+
+.hc-support-plan .hc-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  margin-bottom: 4px;
+  page-break-inside: auto;
+}
+
+.hc-support-plan .hc-table th,
+.hc-support-plan .hc-table td {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  vertical-align: top;
+  padding: 6px 8px;
+  word-break: normal;
+  overflow-wrap: break-word;
+  white-space: normal;
+  border: 1px solid #000;
+}
+
+.hc-support-plan .hc-table .hc-text-block {
+  white-space: pre-line;
+}
+
+.hc-support-plan .hc-label {
+  background: #ebebeb;
+  font-weight: 700;
+  text-align: left;
+}
+
+.hc-support-plan .hc-title-cell {
+  text-align: center;
+  font-weight: 800;
+  font-size: 12pt;
+  border-bottom: none;
+}
+
+.hc-support-plan .hc-center {
+  text-align: center;
+}
+
+.hc-support-plan .hc-section-title {
+  font-weight: 700;
+  margin: 3px 0 4px;
+  padding-left: 2px;
+  page-break-after: avoid;
+}
+
+.hc-support-plan .hc-explanation {
+  border: 1px solid #000;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+}
+
+.hc-support-plan .hc-detail-table .col-item { width: 10%; }
+.hc-support-plan .hc-detail-table .col-goal { width: 25%; }
+.hc-support-plan .hc-detail-table .col-content { width: 45%; }
+.hc-support-plan .hc-detail-table .col-period { width: 8%; }
+.hc-support-plan .hc-detail-table .col-priority { width: 7%; }
+.hc-support-plan .hc-detail-table .col-notes { width: 5%; }
+
+.hc-support-plan .hc-appendix-label { width: 22%; }
+.hc-support-plan .hc-appendix-value { width: 78%; }
+
+.hc-support-plan .hc-signature-label { width: 32%; }
+.hc-support-plan .hc-signature-name { width: 38%; }
+.hc-support-plan .hc-signature-date { width: 30%; text-align: right; }
+
+.hc-support-plan tr.hc-avoid-split {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.hc-support-plan .section {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  h2,
+  h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  table {
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  .hc-support-plan {
+    width: 100%;
+    max-width: none;
+    font-size: 8.5pt;
+  }
+
+  .hc-support-plan .hc-table th,
+  .hc-support-plan .hc-table td {
+    height: auto;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  .hc-support-plan .hc-label {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+</style>
+  <style>body { margin: 0; background: #fff; }</style>
+</head>
+<body><style id="hc-support-plan-pdf-css">
+.hc-support-plan,
+.hc-support-plan * {
+  box-sizing: border-box;
+}
+
+.hc-support-plan {
+  width: 194mm;
+  max-width: 194mm;
+  margin: 0;
+  padding: 0;
+  font-family: "Noto Sans JP", "MS PGothic", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 8.5pt;
+  line-height: 1.38;
+  color: #000;
+  background: #fff;
+}
+
+.hc-support-plan .hc-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  margin-bottom: 4px;
+  page-break-inside: auto;
+}
+
+.hc-support-plan .hc-table th,
+.hc-support-plan .hc-table td {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  vertical-align: top;
+  padding: 6px 8px;
+  word-break: normal;
+  overflow-wrap: break-word;
+  white-space: normal;
+  border: 1px solid #000;
+}
+
+.hc-support-plan .hc-table .hc-text-block {
+  white-space: pre-line;
+}
+
+.hc-support-plan .hc-label {
+  background: #ebebeb;
+  font-weight: 700;
+  text-align: left;
+}
+
+.hc-support-plan .hc-title-cell {
+  text-align: center;
+  font-weight: 800;
+  font-size: 12pt;
+  border-bottom: none;
+}
+
+.hc-support-plan .hc-center {
+  text-align: center;
+}
+
+.hc-support-plan .hc-section-title {
+  font-weight: 700;
+  margin: 3px 0 4px;
+  padding-left: 2px;
+  page-break-after: avoid;
+}
+
+.hc-support-plan .hc-explanation {
+  border: 1px solid #000;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+}
+
+.hc-support-plan .hc-detail-table .col-item { width: 10%; }
+.hc-support-plan .hc-detail-table .col-goal { width: 25%; }
+.hc-support-plan .hc-detail-table .col-content { width: 45%; }
+.hc-support-plan .hc-detail-table .col-period { width: 8%; }
+.hc-support-plan .hc-detail-table .col-priority { width: 7%; }
+.hc-support-plan .hc-detail-table .col-notes { width: 5%; }
+
+.hc-support-plan .hc-appendix-label { width: 22%; }
+.hc-support-plan .hc-appendix-value { width: 78%; }
+
+.hc-support-plan .hc-signature-label { width: 32%; }
+.hc-support-plan .hc-signature-name { width: 38%; }
+.hc-support-plan .hc-signature-date { width: 30%; text-align: right; }
+
+.hc-support-plan tr.hc-avoid-split {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.hc-support-plan .section {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  h2,
+  h3 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  table {
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  .hc-support-plan {
+    width: 100%;
+    max-width: none;
+    font-size: 8.5pt;
+  }
+
+  .hc-support-plan .hc-table th,
+  .hc-support-plan .hc-table td {
+    height: auto;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  .hc-support-plan .hc-label {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+</style><div class="support-plan-pdf-root hc-support-plan"><section class="section"><table class="hc-table"><tbody><tr class="hc-avoid-split"><td colSpan="2" class="hc-title-cell">個別支援計画書</td></tr><tr class="hc-avoid-split"><td class="hc-text-block">利用児氏名：山田 太郎（生年月日：2019/4/12　6歳）
+障害種別等：発達障害（ASD）</td><td>作成年月日：2026/5/16</td></tr></tbody></table></section><section class="section"><table class="hc-table"><tbody><tr class="hc-avoid-split"><th class="hc-label">利用児及び家族の生活に対する意向</th><td colSpan="2" class="hc-text-block">集団活動への参加を少しずつ増やし、家庭でも生活リズムを安定させたい。</td></tr><tr class="hc-avoid-split"><th class="hc-label">総合的な支援の方針</th><td colSpan="2" class="hc-text-block">段階的な集団参加と視覚支援を組み合わせる。（理由：予測可能性を高めることで不安を下げ、小さな成功体験を積むことがASD支援の基本原理であるため。）</td></tr><tr class="hc-avoid-split"><th class="hc-label">長期目標
+（内容・期間等）</th><td class="hc-text-block">【内容】半年後には着替え・トイレをより自立し、集団活動に15分程度参加できる。
+【期間等】本計画期間（おおむね6か月）終了まで（必要に応じて見直し）</td><td rowSpan="2" class="hc-text-block"><strong>支援の標準的な提供時間等</strong>
+（月別スケジュール）
+・1か月目：1か月目：個別での感覚遊び・手順カード導入（理由：成功体験を作る）
+・2か月目：2か月目：2名での並行活動（理由：他者存在への慣れ）
+・3か月目：3か月目：3〜4名のサークル同席（理由：集団への段階的移行）
+・4か月目：4か月目：5分→8分の集団参加（理由：時間延長）
+・5か月目：5か月目：役割分担遊びへの参加（理由：協調の芽を育てる）
+・6か月目：6か月目：10分程度の集団活動参加（理由：半期目標への到達）</td></tr><tr class="hc-avoid-split"><th class="hc-label">短期目標
+（内容・期間等）</th><td class="hc-text-block"><div>【短期目標1（内容）】着替えを声かけ1回で開始し5分以内に完了する
+【期間等】計画開始からおよそ初月〜2か月以内</div><div>
+【短期目標2（内容）】集団サークルに同席し、5分間座って活動を見守る
+【期間等】計画開始からおよそ3か月目まで</div><div>
+【短期目標3（内容）】トイレへ自分から向かい、排泄後の手洗いまで完了する
+【期間等】計画開始からおよそ4〜6か月以内</div></td></tr></tbody></table></section><section class="section"><p class="hc-section-title">○支援目標及び具体的な支援内容</p><table class="hc-table hc-detail-table"><colgroup><col class="col-item"/><col class="col-goal"/><col class="col-content"/><col class="col-period"/><col class="col-priority"/><col class="col-notes"/></colgroup><thead><tr class="hc-avoid-split"><th class="hc-label hc-center">項目
+（本人支援等）</th><th class="hc-label">支援目標
+（具体的な到達目標）</th><th class="hc-label">支援内容
+（内容・支援の提供上のポイント・5領域）</th><th class="hc-label hc-center">期間</th><th class="hc-label hc-center">優先順位</th><th class="hc-label hc-center">留意事項</th></tr></thead><tbody><tr class="hc-avoid-split"><td rowSpan="5" class="hc-center"><strong>本人支援</strong></td><td class="hc-text-block">〔健康・生活〕
+着替えを声かけ1回で開始し5分以内に完了する</td><td class="hc-text-block">ポイント：視覚スケジュールで一日の流れを提示する
+理由：手順の外化が有効なため</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">1</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-text-block">〔運動・感覚〕
+集団サークルに同席し、5分間座って活動を見守る</td><td class="hc-text-block">理由：予測可能性が不安を軽減するため
+ポイント：感覚休憩コーナーを随時利用できるようにする</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">2</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-text-block">〔認知・行為〕
+トイレへ自分から向かい、排泄後の手洗いまで完了する</td><td class="hc-text-block">理由：成功体験を積むため</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">3</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-text-block">〔言語・コミュニケーション〕
+着替えを声かけ1回で開始し5分以内に完了する</td><td class="hc-text-block">理由：過敏時の回復時間が必要なため
+ポイント：褒め・記録は具体的行動に結びつける</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">4</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-text-block">〔対人関係・社会性（集団適応等）〕
+集団サークルに同席し、5分間座って活動を見守る</td><td class="hc-text-block">ポイント：着替え・トイレは手順カードとモデリングで支援
+ポイント：集団前には個別で準備し、参加時間を段階設定
+理由：行動強化が維持に有効なため</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">5</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-center"><strong>家族支援</strong></td><td class="hc-text-block">週1回、家庭での生活リズムとトイレ・着替えの様子を共有する。理由：一般化のため施設と家庭で支援方針を揃える必要があるため。</td><td class="hc-text-block">週1回、家庭での生活リズムとトイレ・着替えの様子を共有する。理由：一般化のため施設と家庭で支援方針を揃える必要があるため。</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">—</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-center"><strong>移行支援</strong></td><td class="hc-text-block">異動・就学等の環境転換に備えた段階的なつながりを確保する。</td><td class="hc-text-block">必要に応じ準備と関係機関との情報共有を行い、安定した移行を支援する。</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">—</td><td class="hc-text-block">—</td></tr><tr class="hc-avoid-split"><td class="hc-center"><strong>地域支援</strong></td><td class="hc-text-block">関係機関との情報共有および協議・調整を行う。</td><td class="hc-text-block">学校・保育・医療・相談支援等と連携し、一体的な支援の質を確保する。</td><td class="hc-text-block hc-center">6か月</td><td class="hc-center">—</td><td class="hc-text-block">—</td></tr></tbody></table></section><section class="section"><table class="hc-table"><tbody><tr class="hc-avoid-split"><th class="hc-label hc-appendix-label">サービス提供時間
+（曜日・時間）</th><td colSpan="2" class="hc-text-block hc-appendix-value">火・木 14:00〜16:00（週2回）</td></tr><tr class="hc-avoid-split"><th class="hc-label hc-appendix-label">身体拘束等について</th><td colSpan="2" class="hc-text-block hc-appendix-value">身体拘束等の実施は行わない。</td></tr><tr class="hc-avoid-split"><th class="hc-label hc-appendix-label">相談支援加算等</th><td colSpan="2" class="hc-text-block hc-appendix-value">該当なし</td></tr><tr class="hc-avoid-split"><th class="hc-label hc-appendix-label">留意点・備考</th><td colSpan="2" class="hc-text-block hc-appendix-value">感覚過敏あり。大声・強い照明は避ける。</td></tr></tbody></table></section><section class="section"><p class="hc-explanation hc-text-block">提供する支援内容について、本計画書に基づき説明しました。</p><table class="hc-table"><tbody><tr class="hc-avoid-split"><th class="hc-label hc-signature-label">児童発達支援管理責任者氏名</th><td class="hc-signature-name">佐藤 花子</td><td class="hc-signature-date">　　　　年　　月　　日
+（保護者署名）</td></tr></tbody></table></section></div></body>
+</html>
