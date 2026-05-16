@@ -535,7 +535,7 @@ async function mountAndExportFormalSupportPlanPdf({
     const inner = host.querySelector(".support-plan-pdf-root");
     if (!inner) throw new Error("PDF root missing");
     await exportSupportPlanPdf(inner, supportPlanFormalPdfFilename(filenameStem), {
-      avoidSplitSelector: "[data-pdf-avoid-split]",
+      avoidSplitSelector: "[data-pdf-avoid-split], .hc-support-card, tr",
     });
   } finally {
     root.unmount();
