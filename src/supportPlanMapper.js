@@ -33,8 +33,16 @@ const DOMAIN_HINTS = [
 ];
 
 function stripInlineMd(line) {
-  return String(line || "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
+  let s = String(line || "");
+  s = s.replace(/```[^\n]*\n([\s\S]*?)```/g, "$1");
+  s = s.replace(/^#{1,6}[ \t]+/gm, "");
+  s = s.replace(/^[ \t]*(?:[*+-]|•)[ \t]+/gm, "");
+  s = s.replace(/!\[([^\]]*)]\([^)]*\)/g, "$1");
+  s = s.replace(/\[([^\]]+)]\([^)]*\)/g, "$1");
+  for (let i = 0; i < 6 && /\*\*/.test(s); i += 1) {
+    s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
+  }
+  return s
     .replace(/`([^`]+)`/g, "$1")
     .replace(/^_+|_+$/g, "")
     .trim();
