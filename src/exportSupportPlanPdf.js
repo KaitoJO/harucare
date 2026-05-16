@@ -251,7 +251,7 @@ export async function exportSupportPlanPdf(element, filename, options = {}) {
     orientation: "portrait",
     compress: true,
   });
-  addPagedCanvasToPdf(doc, canvas, 12, {
+  addPagedCanvasToPdf(doc, canvas, 8, {
     avoidBandsSorted: avoidBands,
     pageBreakAnchorsSorted: pageBreakAnchors,
   });
