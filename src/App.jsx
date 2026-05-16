@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
-import { exportSupportPlanPdf, supportPlanPdfFilename } from "./exportSupportPlanPdf.js";
+import { exportSupportPlanPdf, supportPlanFormalPdfFilename } from "./exportSupportPlanPdf.js";
 import { getSupabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
 import * as workspaceDb from "./lib/workspaceDb.js";
 import AuthScreen from "./AuthScreen.jsx";
+import { buildFormalPlanDocument } from "./supportPlanMapper.js";
+import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
 
 const DISABILITY_TYPES = [
   "自閉スペクトラム症",
@@ -506,67 +508,23 @@ function ProgramMarkdown({ text }) {
   );
 }
 
-/** PDF 出力用（一時的に body にマウントして html2canvas する） */
-function SupportPlanPdfMount({ name, age, disability, programText }) {
-  return (
-    <div
-      className="support-plan-pdf-root"
-      style={{
-        width: 820,
-        maxWidth: 820,
-        boxSizing: "border-box",
-        padding: "4px 2px 10px",
-        background: "#fff",
-        color: "#2a3a2a",
-        fontFamily: "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif",
-        fontSize: 12.5,
-        lineHeight: 1.65,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 16,
-          fontWeight: 700,
-          color: "#2d5a3d",
-          marginBottom: 8,
-        }}
-      >
-        {name}の個別支援プログラム
-      </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "#6a7a6a",
-          marginBottom: 14,
-        }}
-      >
-        {age} · {disability}
-      </div>
-      <ProgramMarkdown text={programText} />
-    </div>
-  );
-}
-
-async function mountAndExportSupportPlanPdf({
-  name,
-  age,
-  disability,
+/** PDF 出力（厚労省略示に沿った個別支援計画様式レイアウト／html2canvas） */
+async function mountAndExportFormalSupportPlanPdf({
+  mappedPlanSnapshot,
+  childPayload,
   programText,
+  planCreatedIso,
   filenameStem,
 }) {
+  const doc =
+    mappedPlanSnapshot ??
+    buildFormalPlanDocument(childPayload, programText, planCreatedIso);
   const host = document.createElement("div");
   host.style.cssText =
-    "position:fixed;left:-12000px;top:0;width:820px;opacity:0.01;pointer-events:none;z-index:-1;";
+    "position:fixed;left:-12000px;top:0;width:840px;opacity:0.01;pointer-events:none;z-index:-1;";
   document.body.appendChild(host);
   const root = createRoot(host);
-  root.render(
-    <SupportPlanPdfMount
-      name={name}
-      age={age}
-      disability={disability}
-      programText={programText}
-    />,
-  );
+  root.render(<FormalSupportPlanPdfMount doc={doc} />);
   try {
     await new Promise((r) => {
       requestAnimationFrame(() => {
@@ -578,7 +536,7 @@ async function mountAndExportSupportPlanPdf({
     if (!inner) throw new Error("PDF root missing");
     await exportSupportPlanPdf(
       inner,
-      supportPlanPdfFilename(filenameStem),
+      supportPlanFormalPdfFilename(filenameStem),
     );
   } finally {
     root.unmount();
@@ -953,6 +911,10 @@ function buildUserPrompt(child, extraPlanPrompt = "") {
 運動・身体能力のレベル：${child.motorLevel}
 コミュニケーションのレベル：${child.communicationLevel}
 社会性・対人関係のレベル：${child.socialLevel}
+生年月日：${child.birthDate?.trim() || "（未入力）"}
+利用者及び家族の生活に対する意向（アセスメント）：${child.familyLifeIntentions?.trim() || "（未入力）"}
+支援の標準的な提供時間の想定（施設サービス）：${child.standardSupportProvision?.trim() || "（未入力）"}
+児童発達支援管理責任者（記名欄に使用）：${child.managerName?.trim() || "（未入力）"}
 現在の主な課題：${child.currentIssues?.trim() || "（未入力）"}
 半年後の目標：${child.goals?.trim() || "（未入力）"}
 備考：${child.notes?.trim() || "（未入力）"}
@@ -1008,11 +970,15 @@ function buildChildContextForAiLogs(child) {
   return `【利用児の基本情報】
 お名前：${child.name}
 年齢：${child.age}
+生年月日：${child.birthDate?.trim() || "（未入力）"}
 障害種別：${child.disability}
 重症度：${child.severity}
 運動・身体能力：${child.motorLevel}
 コミュニケーション：${child.communicationLevel}
 社会性：${child.socialLevel}
+生活に対する意向（アセスメント）：${child.familyLifeIntentions?.trim() || "（未入力）"}
+標準提供時間の想定：${child.standardSupportProvision?.trim() || "（未入力）"}
+児発管記名（アセスメント）：${child.managerName?.trim() || "（未入力）"}
 現在の主な課題：${child.currentIssues?.trim() || "（未入力）"}
 半年後の目標：${child.goals?.trim() || "（未入力）"}
 備考：${child.notes?.trim() || "（未入力）"}`;
@@ -1215,6 +1181,10 @@ export default function App() {
     motorLevel: "中",
     communicationLevel: "低",
     socialLevel: "低",
+    birthDate: "",
+    familyLifeIntentions: "",
+    standardSupportProvision: "",
+    managerName: "",
     currentIssues: "",
     goals: "",
     notes: "",
@@ -1263,6 +1233,10 @@ export default function App() {
           motorLevel: "中",
           communicationLevel: "低",
           socialLevel: "低",
+          birthDate: "",
+          familyLifeIntentions: "",
+          standardSupportProvision: "",
+          managerName: "",
           currentIssues: "",
           goals: "",
           notes: "",
@@ -1523,6 +1497,10 @@ export default function App() {
       motorLevel: "中",
       communicationLevel: "低",
       socialLevel: "低",
+      birthDate: "",
+      familyLifeIntentions: "",
+      standardSupportProvision: "",
+      managerName: "",
       currentIssues: "",
       goals: "",
       notes: "",
@@ -1668,6 +1646,11 @@ export default function App() {
     if (!generatedProgram.trim()) return;
     if (!supabase || !session?.user?.id) return;
     const createdAt = generatedAtIso || new Date().toISOString();
+    const mappedPlan = buildFormalPlanDocument(
+      selectedChild,
+      generatedProgram,
+      createdAt,
+    );
     const entry = {
       id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
       childName: selectedChild.name,
@@ -1676,6 +1659,7 @@ export default function App() {
       createdAtLabel: formatJaDateTime(createdAt),
       programText: generatedProgram,
       title: "個別支援計画書",
+      mappedPlan,
     };
     try {
       await workspaceDb.insertSavedProgram(supabase, session.user.id, entry);
@@ -1807,11 +1791,11 @@ export default function App() {
     if (!selectedChild || !generatedProgram.trim()) return;
     setPdfBusy(true);
     try {
-      await mountAndExportSupportPlanPdf({
-        name: selectedChild.name,
-        age: selectedChild.age,
-        disability: selectedChild.disability,
+      await mountAndExportFormalSupportPlanPdf({
+        mappedPlanSnapshot: null,
+        childPayload: selectedChild,
         programText: generatedProgram,
+        planCreatedIso: generatedAtIso || new Date().toISOString(),
         filenameStem: selectedChild.name,
       });
     } catch (e) {
@@ -1819,7 +1803,7 @@ export default function App() {
     } finally {
       setPdfBusy(false);
     }
-  }, [selectedChild, generatedProgram]);
+  }, [selectedChild, generatedProgram, generatedAtIso]);
 
   const handleExportSavedProgramPdf = useCallback(async () => {
     if (!selectedSaved?.programText?.trim()) return;
@@ -1829,11 +1813,15 @@ export default function App() {
         children.find((c) => String(c.id) === String(selectedSaved.childId)) ||
         children.find((c) => c.name === selectedSaved.childName);
       const name = selectedSaved.childName;
-      await mountAndExportSupportPlanPdf({
-        name,
-        age: child?.age ?? "—",
-        disability: child?.disability ?? "—",
+      await mountAndExportFormalSupportPlanPdf({
+        mappedPlanSnapshot: selectedSaved.mappedPlan ?? null,
+        childPayload: {
+          ...(child || {}),
+          name,
+          childName: name,
+        },
         programText: selectedSaved.programText,
+        planCreatedIso: selectedSaved.createdAt || new Date().toISOString(),
         filenameStem: name,
       });
     } catch (e) {
@@ -2538,7 +2526,11 @@ export default function App() {
                   marginBottom: 4,
                 }}
               >
-                {editingChildId ? "お子さま情報を編集" : "お子さまを登録"}
+                {editingChildId ? "アセスメントを編集" : "アセスメントシート"}
+              </div>
+              <div style={{ fontSize: 13, color: "#5a6a5a", lineHeight: 1.65 }}>
+                こちらが個別支援計画書への自動マッピング元になります。
+                「生活に対する意向」「標準提供時間」「児発管」の入力があると様式PDFの該当欄に反映されます。
               </div>
             </div>
             <div style={s.card}>
@@ -2548,6 +2540,15 @@ export default function App() {
                   value={form.name}
                   onChange={(e) => handleChange("name", e.target.value)}
                   placeholder="例：たろうくん"
+                  style={s.input}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>生年月日（計画様式）</label>
+                <input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(e) => handleChange("birthDate", e.target.value)}
                   style={s.input}
                 />
               </div>
@@ -2569,6 +2570,53 @@ export default function App() {
                 options={SEVERITY}
                 onChange={(v) => handleChange("severity", v)}
               />
+            </div>
+            <div style={s.card}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#2d5a3d",
+                  marginBottom: 14,
+                }}
+              >
+                計画書に直結するアセスメント項目
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>
+                  利用者及び家族の生活に対する意向・ねらい
+                </label>
+                <VoiceAppendTextarea
+                  value={form.familyLifeIntentions}
+                  onValueChange={(next) =>
+                    setForm((f) => ({ ...f, familyLifeIntentions: next }))
+                  }
+                  rows={4}
+                  placeholder="例：在宅での生活リズムを安定させつつ、集団での友だち関係に興味を持ってほしい 等"
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>支援の標準的な提供時間等の想定</label>
+                <VoiceAppendTextarea
+                  value={form.standardSupportProvision}
+                  onValueChange={(next) =>
+                    setForm((f) => ({ ...f, standardSupportProvision: next }))
+                  }
+                  rows={2}
+                  placeholder="例：月〜金曜のうち週3回／各2時間／放課後14:30〜18:30帯での提供　等"
+                />
+              </div>
+              <div>
+                <label style={s.label}>
+                  児童発達支援管理責任者氏名（計画様式への記載用）
+                </label>
+                <input
+                  value={form.managerName}
+                  onChange={(e) => handleChange("managerName", e.target.value)}
+                  placeholder="計画作成時に氏名記入（施設側で入力）"
+                  style={s.input}
+                />
+              </div>
             </div>
             <div style={s.card}>
               <div
@@ -2613,7 +2661,7 @@ export default function App() {
                 />
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={s.label}>半年後の目標（任意）</label>
+                <label style={s.label}>半年後のねらい（長期ねらい・計画にも反映）</label>
                 <VoiceAppendTextarea
                   value={form.goals}
                   onValueChange={(next) => setForm((f) => ({ ...f, goals: next }))}
@@ -2701,6 +2749,9 @@ export default function App() {
                       marginTop: 2,
                     }}
                   >
+                    {selectedChild.birthDate
+                      ? `${formatJaDate(selectedChild.birthDate)} · `
+                      : ""}
                     {selectedChild.age} · {selectedChild.disability} ·{" "}
                     {selectedChild.severity}
                   </div>
@@ -2720,6 +2771,12 @@ export default function App() {
                         communicationLevel:
                           selectedChild.communicationLevel || "低",
                         socialLevel: selectedChild.socialLevel || "低",
+                        birthDate: selectedChild.birthDate || "",
+                        familyLifeIntentions:
+                          selectedChild.familyLifeIntentions || "",
+                        standardSupportProvision:
+                          selectedChild.standardSupportProvision || "",
+                        managerName: selectedChild.managerName || "",
                         currentIssues: selectedChild.currentIssues || "",
                         goals: selectedChild.goals || "",
                         notes: selectedChild.notes || "",
@@ -2857,6 +2914,70 @@ export default function App() {
                 </div>
               </div>
             </div>
+            {(selectedChild.birthDate ||
+              selectedChild.familyLifeIntentions ||
+              selectedChild.standardSupportProvision ||
+              selectedChild.managerName) && (
+              <div style={s.card}>
+                <div style={{ ...s.label, marginBottom: 12 }}>
+                  アセスメント（様式への反映項目）
+                </div>
+                {selectedChild.birthDate ? (
+                  <div style={{ marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, color: "#7a8a7a" }}>
+                      生年月日：
+                    </span>
+                    <span style={{ fontSize: 13, color: "#2a3a2a" }}>
+                      {formatJaDate(selectedChild.birthDate)}
+                    </span>
+                  </div>
+                ) : null}
+                {selectedChild.familyLifeIntentions ? (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 2 }}>
+                      生活に対する意向
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#2a3a2a",
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {selectedChild.familyLifeIntentions}
+                    </div>
+                  </div>
+                ) : null}
+                {selectedChild.standardSupportProvision ? (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 2 }}>
+                      標準的な提供時間等（想定）
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#2a3a2a",
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {selectedChild.standardSupportProvision}
+                    </div>
+                  </div>
+                ) : null}
+                {selectedChild.managerName ? (
+                  <div>
+                    <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 2 }}>
+                      児童発達支援管理責任者氏名（記載用）
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#2d5a3d" }}>
+                      {selectedChild.managerName}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
             {selectedChild.currentIssues && (
               <div style={s.card}>
                 <label style={s.label}>現在の課題</label>
@@ -2884,7 +3005,7 @@ export default function App() {
 
             <div style={s.card}>
               <div style={{ fontSize: 11, color: "#7a8a7a", marginBottom: 12, lineHeight: 1.5 }}>
-                基本情報（診断・年齢・課題など）は AI に自動で渡されます。
+                アセスメント情報は自動でAIに渡り、告示例示準拠の様式レイアウトでPDFにも反映されます。
               </div>
               <div
                 style={{
@@ -3935,7 +4056,7 @@ export default function App() {
                           : "pointer",
                     })}
                   >
-                    {pdfBusy ? "作成中…" : "PDFダウンロード"}
+                    {pdfBusy ? "作成中…" : "様式PDF（個別支援計画書）"}
                   </button>
                 </div>
                 <div
@@ -4429,7 +4550,7 @@ export default function App() {
                   cursor: pdfBusy ? "not-allowed" : "pointer",
                 })}
               >
-                {pdfBusy ? "作成中…" : "PDFダウンロード"}
+                {pdfBusy ? "作成中…" : "様式PDF（個別支援計画書）"}
               </button>
             </div>
             <div

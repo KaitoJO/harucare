@@ -8,6 +8,14 @@ function childFromRow(r) {
     motorLevel: r.motor_level ?? "中",
     communicationLevel: r.communication_level ?? "低",
     socialLevel: r.social_level ?? "低",
+    birthDate: r.birth_date != null ? String(r.birth_date) : "",
+    familyLifeIntentions:
+      r.family_life_intentions != null ? String(r.family_life_intentions) : "",
+    standardSupportProvision:
+      r.standard_support_provision != null
+        ? String(r.standard_support_provision)
+        : "",
+    managerName: r.manager_name != null ? String(r.manager_name) : "",
     currentIssues: r.current_issues ?? "",
     goals: r.goals ?? "",
     notes: r.notes ?? "",
@@ -26,7 +34,11 @@ function savedProgramFromRow(r) {
     createdAt: r.created_at,
     createdAtLabel: r.created_at_label ?? "",
     programText: r.program_text,
-    title: r.title != null && String(r.title).trim() ? String(r.title).trim() : undefined,
+    title:
+      r.title != null && String(r.title).trim()
+        ? String(r.title).trim()
+        : undefined,
+    mappedPlan: r.mapped_plan ?? undefined,
   };
 }
 
@@ -41,7 +53,10 @@ function supportRecordFromRow(r) {
     success: r.success ?? "",
     challenges: r.challenges ?? "",
     handover: r.handover ?? "",
-    title: r.title != null && String(r.title).trim() ? String(r.title).trim() : undefined,
+    title:
+      r.title != null && String(r.title).trim()
+        ? String(r.title).trim()
+        : undefined,
   };
 }
 
@@ -69,7 +84,10 @@ function diaryFromRow(r) {
     createdAtLabel: r.created_at_label ?? "",
     programText: r.program_text,
     sourceInputs: r.source_inputs ?? undefined,
-    title: r.title != null && String(r.title).trim() ? String(r.title).trim() : undefined,
+    title:
+      r.title != null && String(r.title).trim()
+        ? String(r.title).trim()
+        : undefined,
   };
 }
 
@@ -133,6 +151,10 @@ export async function insertChild(supabase, userId, form) {
     motor_level: form.motorLevel,
     communication_level: form.communicationLevel,
     social_level: form.socialLevel,
+    birth_date: form.birthDate?.trim() || "",
+    family_life_intentions: form.familyLifeIntentions?.trim() || "",
+    standard_support_provision: form.standardSupportProvision?.trim() || "",
+    manager_name: form.managerName?.trim() || "",
     current_issues: form.currentIssues ?? "",
     goals: form.goals ?? "",
     notes: form.notes ?? "",
@@ -155,6 +177,10 @@ export async function updateChild(supabase, userId, childId, form) {
     motor_level: form.motorLevel,
     communication_level: form.communicationLevel,
     social_level: form.socialLevel,
+    birth_date: form.birthDate?.trim() || "",
+    family_life_intentions: form.familyLifeIntentions?.trim() || "",
+    standard_support_provision: form.standardSupportProvision?.trim() || "",
+    manager_name: form.managerName?.trim() || "",
     current_issues: form.currentIssues ?? "",
     goals: form.goals ?? "",
     notes: form.notes ?? "",
@@ -221,6 +247,8 @@ export async function insertSavedProgram(supabase, userId, entry) {
     created_at: entry.createdAt,
     created_at_label: entry.createdAtLabel,
     program_text: entry.programText,
+    title: entry.title ?? null,
+    mapped_plan: entry.mappedPlan ?? null,
   });
   if (error) throw error;
 }

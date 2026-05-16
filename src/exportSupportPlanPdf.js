@@ -81,3 +81,12 @@ export function supportPlanPdfFilename(childName) {
     .slice(0, 80);
   return `${base || "支援計画"}_支援計画.pdf`;
 }
+
+/** 告示・例示準拠の個別支援計画書レイアウト用PDF */
+export function supportPlanFormalPdfFilename(childName) {
+  const base = String(childName || "個別支援計画")
+    .replace(/[/\\?%*:|"<>]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+  return `${base || "個別支援計画"}_個別支援計画書.pdf`;
+}
