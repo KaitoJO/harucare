@@ -521,7 +521,7 @@ async function mountAndExportFormalSupportPlanPdf({
     buildFormalPlanDocument(childPayload, programText, planCreatedIso);
   const host = document.createElement("div");
   host.style.cssText =
-    "position:fixed;left:-12000px;top:0;width:840px;opacity:0.01;pointer-events:none;z-index:-1;";
+    "position:fixed;left:-12000px;top:0;width:220mm;opacity:0.01;pointer-events:none;z-index:-1;";
   document.body.appendChild(host);
   const root = createRoot(host);
   root.render(<FormalSupportPlanPdfMount doc={doc} />);
@@ -534,10 +534,9 @@ async function mountAndExportFormalSupportPlanPdf({
     await document.fonts.ready;
     const inner = host.querySelector(".support-plan-pdf-root");
     if (!inner) throw new Error("PDF root missing");
-    await exportSupportPlanPdf(
-      inner,
-      supportPlanFormalPdfFilename(filenameStem),
-    );
+    await exportSupportPlanPdf(inner, supportPlanFormalPdfFilename(filenameStem), {
+      avoidSplitSelector: "[data-pdf-avoid-split]",
+    });
   } finally {
     root.unmount();
     host.remove();

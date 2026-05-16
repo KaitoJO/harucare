@@ -68,6 +68,72 @@ function pickSection(sections, ...needles) {
   return "";
 }
 
+/** 参照日基準のおおよその満年齢（表示用）。 */
+function estimateAgeJpFromBirthYYYY_MM_DD(yMd, referenceIso) {
+  const s = String(yMd ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  let refMs = Date.now();
+  if (referenceIso) {
+    const t = new Date(referenceIso).getTime();
+    if (!Number.isNaN(t)) refMs = t;
+  }
+  const ref = new Date(refMs);
+  try {
+    const [y0, mo0, d0] = s.split("-").map(Number);
+    const birth = new Date(y0, mo0 - 1, d0);
+    let ageYears = ref.getFullYear() - birth.getFullYear();
+    const mDiff = ref.getMonth() - birth.getMonth();
+    const dDiff = ref.getDate() - birth.getDate();
+    if (mDiff < 0 || (mDiff === 0 && dDiff < 0)) ageYears -= 1;
+    return ageYears >= 0 ? `${String(ageYears)}歳` : "";
+  } catch {
+    return "";
+  }
+}
+
+function synthesizeProvisionText(sections) {
+  const candidates = [
+    pickSection(
+      sections,
+      "標準的な提供時間",
+      "提供時間",
+      "サービス提供",
+      "利用日",
+      "曜日・頻度",
+      "頻度",
+      "時間",
+      "曜日",
+    ),
+    pickSection(sections, "月ごと", "活動計画"),
+  ].map((raw) =>
+    stripInlineMd(String(raw || "")).replace(/\s+/g, " ").trim(),
+  );
+  const hit =
+    candidates.find((t) => t.length >= 18 && !/^※/.test(t)) ??
+    "";
+  return hit.slice(0, 900);
+}
+
+function truncatePlain(s, n) {
+  const t = stripInlineMd(s).replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, Math.max(0, n - 1))}…` : t;
+}
+
+function synthesizeRegionalBody(familyAi, issueBackground, childName) {
+  const bits = [
+    childName
+      ? `${childName}さんについて、学校・保育・医療・相談支援等との情報共有、必要時の協議・調整および関係文書に基づく支援の調整を行う。`
+      : "関係機関との情報共有・協議および必要時の調整により、一体的な支援の質を確保する。",
+  ];
+  const fa = stripInlineMd(String(familyAi || "")).trim();
+  const ib = stripInlineMd(String(issueBackground || "")).trim();
+  /** 前半は家族寄りになりがちのため末尾を地域連携側に載せやすくするため二段構成 */
+  if (fa.length >= 160) bits.push(truncatePlain(fa, 520));
+  else if (fa) bits.push(fa);
+  if (ib.length >= 12) bits.push(`（関連する背景情報）${truncatePlain(ib, 360)}`);
+  return bits.filter(Boolean).join("\n").trim();
+}
+
 /** @returns {string[]} */
 function bulletsFromMarkdown(text) {
   const lines = String(text || "")
@@ -85,56 +151,232 @@ function bulletsFromMarkdown(text) {
   return out;
 }
 
+function stripTrailingReasonSentence(s) {
+  const t = String(s || "").trim();
+  const ix = t.search(/\s*[（(]?\s*(?:設定)?理由\s*[：:]|（理由\s*[：:]）/);
+  if (ix <= 32) return t;
+  return t.slice(0, ix).replace(/[\s.。…]+$/, "").trim() || t;
+}
+
+function normalizeGoalSentence(s) {
+  return stripTrailingReasonSentence(stripInlineMd(s));
+}
+
+function dedupeGoalBodies(goalsIn) {
+  /** @type {string[]} */
+  const out = [];
+  const heads = new Set();
+  goalsIn.forEach((gRaw) => {
+    const g = normalizeGoalSentence(gRaw);
+    if (g.length < 22 || /^※/.test(g) || /入力してください/u.test(g)) return;
+    const head = `${g.slice(0, Math.min(g.length, 160)).toLowerCase()}`;
+    if (heads.has(head)) return;
+    heads.add(head);
+    out.push(g);
+  });
+  return out.slice(0, 8);
+}
+
 /**
- * 短期目標セクションから「目標：」または箇条書きを抽出
- * @returns {{ content: string, periodGuess: string }[]}
+ * 「短期目標」Markdownから目標文を抽出する
+ * @param {string} sectionText
+ * @returns {string[]}
  */
-function parseShortTermGoals(sectionText, fallbackLines) {
+function extractGoalBodiesFromShortTerm(sectionText) {
   const raw = String(sectionText || "");
-  /** @type {{ content: string, periodGuess: string }[]} */
-  const goals = [];
+  /** @type {string[]} */
+  const gathered = [];
 
-  const blockRe =
-    /\*\*\s*目標\s*[：:]?\*\*\s*[：:]?\s*(.+)|[-*]\s*\*?\s*目標\s*[：:]?\s*(.+)/gu;
-  let m;
-  const copy = raw;
-  while ((m = blockRe.exec(copy)) !== null) {
-    const line = stripInlineMd(m[1] || m[2] || "").trim();
-    if (line) goals.push({ content: line, periodGuess: "" });
+  /** 複数 "##" が残っている場合のみ先頭ブロックのみ使用 */
+  let bodyOnly = raw;
+  const nextH2 = bodyOnly.match(/\n(?:##\s+[^\s])/u);
+  if (nextH2?.index != null && nextH2.index > 40) {
+    bodyOnly = bodyOnly.slice(0, nextH2.index);
   }
 
-  let reasonMerged = "";
-  const reasonMatch = /\*\*\s*設定理由\s*[：:]?\*\*([\s\S]+?)(?=\n\s*[-*]|\n\*\*|##|\n\n\n|$)/u.exec(raw);
-  if (reasonMatch) reasonMerged = stripInlineMd(reasonMatch[1]).replace(/\s+/g, " ").trim();
-
-  if (goals.length === 0) {
-    for (const b of bulletsFromMarkdown(raw)) {
-      if (/設定理由|^理由[：:]/.test(b)) continue;
-      goals.push({ content: b, periodGuess: "" });
-      if (goals.length >= 5) break;
-    }
+  const lineGoalRe =
+    /(?:^|\n)\s*[-*]\s*(?:\*\*)?\s*(?:●\s*)?目標\s*[：:･]+\s*([^\r\n]+)/giu;
+  for (const m of bodyOnly.matchAll(lineGoalRe)) {
+    const rest = stripInlineMd(m[1] || "");
+    const piece = normalizeGoalSentence(rest);
+    if (piece.length >= 22) gathered.push(piece);
   }
 
-  while (goals.length < 3 && fallbackLines.length) {
-    goals.push({
-      content: fallbackLines.shift() ?? "",
-      periodGuess: "",
-    });
-  }
-
-  goals.forEach((g) => {
-    g.periodGuess = goals.length <= 3 ? "計画初月〜3か月目" : "計画作成日から約6か月以内";
-    if (reasonMerged && goals.length <= 3) {
-      const prefix = `${g.content}（設定理由の要約：${reasonMerged.slice(0, 220)}`;
-      g.content =
-        prefix.length >= 440 ? `${prefix.slice(0, 437)}…）` : `${prefix}）`;
+  bodyOnly.split(/\r?\n/).forEach((line) => {
+    const t = stripInlineMd(line.trim());
+    if (!t || /^##/.test(t)) return;
+    if (/設定理由|^理由|^ポイント/.test(t)) return;
+    const hasGoalKey = /目標\s*[：:･]/u.test(t);
+    const isBulletGoal = /^[-*]\s+/.test(t) && hasGoalKey;
+    if (!isBulletGoal && !/^目標\s*[：:･]/u.test(t.trim())) return;
+    const stripped = normalizeGoalSentence(
+      stripInlineMd(t.replace(/^[-*]+\s*/, "").trim()),
+    );
+    /** `目標：` だけの行などを除外 **/
+    const body = stripped.replace(/^[^：:･]*[：:･]+\s*/, "").trim() || stripped;
+    if (
+      normalizeGoalSentence(body).length >= 22 &&
+      !/^※/.test(normalizeGoalSentence(body))
+    ) {
+      gathered.push(normalizeGoalSentence(body));
     }
   });
 
-  while (goals.length < 3) {
+  if (!gathered.length) {
+    for (const b of bulletsFromMarkdown(bodyOnly)) {
+      if (/設定理由|^理由|ポイント[：:]/.test(b)) continue;
+      gathered.push(normalizeGoalSentence(b));
+    }
+  }
+
+  return dedupeGoalBodies(gathered).slice(0, 8);
+}
+
+/**
+ * アセスメント短文を補強（フォールバック用）
+ */
+function splitSupportBulletLead(bul) {
+  return normalizeGoalSentence(bul.replace(/^[-*\d]+\.?\s+/, ""));
+}
+
+/** 長期ねらい文を短文に繰り返し使うときのトリム **/
+function shortenForDomainRef(s, n) {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, Math.max(n - 1, 20))}…` : t;
+}
+
+/**
+ * AIが出力した短期目標文を順に繰り返し割り当て、各領域の支援ポイント要約を末尾に連結する。
+ */
+function buildDomainSupportTargets(
+  goalBodiesCanonical,
+  supportBulletLinesForFallback,
+  longTermSentence,
+  buckets,
+) {
+  const primary = [...(goalBodiesCanonical || [])].filter(
+    (g) =>
+      typeof g === "string" && g.trim().length >= 18 && !/^※/.test(g.trim()),
+  );
+
+  const fromSupportBullets = [...(supportBulletLinesForFallback || [])]
+    .map((line) =>
+      shortenForDomainRef(splitSupportBulletLead(String(line ?? "")), 420),
+    )
+    .filter((s) => s.length >= 28 && !/^※/.test(s));
+
+  let pool =
+    primary.length > 0
+      ? [...primary]
+      : fromSupportBullets.length > 0
+        ? [...fromSupportBullets]
+        : [];
+
+  const ltShort = shortenForDomainRef(longTermSentence, 400);
+  if (!pool.length && ltShort.length >= 30) pool = [ltShort, ltShort, ltShort];
+
+  const onePerDomain = SUPPORT_DOMAINS.map((domainLabel, i) => {
+    if (!pool.length) {
+      return `${domainLabel}の領域で、総合的な支援方針に照らし観察可能な短期のねらいを設定する。`;
+    }
+    const core = pool[i % pool.length];
+    const bucketBits = (buckets[i] || [])
+      .map((b) => shortenForDomainRef(stripTrailingReasonSentence(b), 280))
+      .filter(Boolean);
+    const tail = bucketBits.length ? bucketBits.join(" / ") : "";
+    if (!tail) return core;
+    const head = tail.slice(0, 40);
+    if (core.includes(head)) return core;
+    return `${core}\n（${domainLabel}の観点：${tail}）`;
+  });
+
+  return onePerDomain;
+}
+
+/**
+ * 短期目標ブロック → 様式用（3件）＋期間のざっくり推定
+ * @returns {{ content: string, periodGuess: string }[]}
+ */
+/**
+ * @param {string} sectionText
+ * @param {string[]} fallbackBulletsRaw
+ * @param {{ ltContent?: string, comprehensive?: string, combinedBullets?: string[] }} [ctx]
+ */
+function parseShortTermGoals(sectionText, fallbackBulletsRaw, ctx) {
+  const fbIn = [...(fallbackBulletsRaw || [])].map((x) => normalizeGoalSentence(x));
+  const extracted = extractGoalBodiesFromShortTerm(sectionText);
+  const merged = dedupeGoalBodies([...extracted, ...fbIn.filter(Boolean)]);
+
+  /** @type {{ content: string, periodGuess: string }[]} */
+  const goals = merged.map((content) => ({
+    content,
+    periodGuess: "",
+  }));
+
+  const fbRemain = [...fbIn.filter((x) => x.length >= 18)];
+  while (goals.length < 3 && fbRemain.length) {
+    const cur = fbRemain.shift()?.trim?.() ?? "";
+    if (
+      cur &&
+      cur.length >= 24 &&
+      !goals.some((g) => g.content.slice(0, 80) === cur.slice(0, 80))
+    ) {
+      goals.push({ content: cur, periodGuess: "" });
+    }
+  }
+
+  goals.forEach((g, idx) => {
+    g.periodGuess =
+      idx === 0
+        ? "計画開始からおよそ初月〜2か月以内"
+        : idx === 1
+          ? "計画開始からおよそ3か月目まで"
+          : "計画開始からおよそ4〜6か月以内";
+    if (idx >= 3) {
+      g.periodGuess =
+        "計画作成後、全体のねらいに沿って順次見込む時期として設定すること。";
+    }
+  });
+
+  /** 二次：マークダウン側のリスト・長期ねらい・方針の先頭などから短文を補う */
+  let padSlot = goals.length;
+  while (padSlot < 3) {
+    const slotIndex = padSlot;
+    padSlot += 1;
+    const fromBullet =
+      normalizeGoalSentence(
+        stripInlineMd(ctx?.combinedBullets?.[slotIndex] ?? ""),
+      ) ||
+      normalizeGoalSentence(
+        stripInlineMd(ctx?.combinedBullets?.at(-1) ?? ""),
+      );
+    let content = "";
+    if (fromBullet.length >= 26) content = fromBullet;
+    else {
+      const fromLt =
+        typeof ctx?.ltContent === "string" && ctx.ltContent.trim().length >= 24
+          ? truncatePlain(ctx.ltContent, 340)
+          : "";
+      const comp = truncatePlain(ctx?.comprehensive ?? "", 520);
+      if (slotIndex === 0 && fromLt) content = fromLt;
+      else if (comp.length >= 30) {
+        const partsComp = comp.split(/[。\n]/u).filter(Boolean);
+        content =
+          partsComp[slotIndex]?.trim()?.slice?.(0, 280) ??
+          comp.slice(0, Math.min(comp.length, 280));
+      } else {
+        content = `短期のねらい${String(slotIndex + 1)}として、日常場面での小さな成功体験の積み重ねにより、安心感・生活リズムの確立および本人の意欲づけに向けた具体的な変化として観察可能な達成項目を計画する。`;
+      }
+    }
+
     goals.push({
-      content: "※AI出力を確認し、観察可能な短期目標を具体的に記入してください。",
-      periodGuess: "",
+      content: normalizeGoalSentence(content),
+      periodGuess:
+        slotIndex === 0
+          ? "計画初月頃まで"
+          : slotIndex === 1
+            ? "計画開始からおよそ半期の前半"
+            : "計画開始からおよそ半期の後半",
     });
   }
 
@@ -202,10 +444,16 @@ export function computeFamilyIntentions(child, issueBackground, aiFamilySection)
   if (n) parts.push(`【補足】\n${n}`);
   if (issueBackground) parts.push(`【課題の背景との関連】\n${issueBackground.slice(0, 500)}`);
   if (aiFamilySection) parts.push(`【計画上の家庭との連携】\n${aiFamilySection}`);
-  return (
-    parts.join("\n\n").trim() ||
-    "※アセスメントの「家族の意向・ねらい」欄およびAI本文の該当箇所を確認し、ご家庭の意向を具体的に記入してください。"
-  );
+  const merged = parts.join("\n\n").trim();
+  if (merged.length >= 12) return merged;
+  const childName =
+    stripInlineMd(child?.childName ?? child?.name ?? "").trim() || "";
+  const notesTail = stripInlineMd(String(child?.notes ?? "")).trim();
+  const base = `${childName ? `${childName}さん` : "利用児"}について、保育・家庭・サービスでの観察に基づき、ご家庭の養育上のねらいと本人の状態を総合して支援計画へ反映すること。`;
+  return [base, String(aiFamilySection ?? "").slice(0, 480), issueBackground.slice(0, 400), notesTail.slice(0, 400)]
+    .filter((x) => String(x ?? "").trim().length >= 4)
+    .join("\n\n")
+    .trim();
 }
 
 export function formatBirthDateJp(yyyyMmDd) {
@@ -239,27 +487,13 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
     stripInlineMd(pickSection(sections, "課題の背景")).replace(/\s+/g, " ").trim() ||
     "";
 
-  let comprehensiveSupportPolicy =
-    stripInlineMd(pickSection(sections, "支援方針")).replace(/\s+/g, " ").trim() ||
-    "";
-  if (!comprehensiveSupportPolicy) {
-    comprehensiveSupportPolicy = String(child?.notes || "").trim().slice(0, 800);
-    if (!comprehensiveSupportPolicy)
-      comprehensiveSupportPolicy =
-        "※AI出力の「支援方針」セクションが見つかりませんでした。本文から転記または再生成してください。";
-  }
-
   const shortRaw = pickSection(
     sections,
     "短期目標",
     "3. ",
   );
   const familyAi = stripInlineMd(pickSection(sections, "家庭との連携")).trim();
-
   const shortFallback = bulletsFromMarkdown(shortRaw).filter(Boolean);
-  const shortTermGoalsList = parseShortTermGoals(shortRaw, [...shortFallback]);
-
-  const lt = pickLongTerm(child?.goals, familyAi, child?.disability);
 
   const bulletsSupport = bulletsFromMarkdown(
     pickSection(sections, "支援のポイント", "支援ポイント", "ポイント"),
@@ -268,7 +502,6 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
     pickSection(sections, "月ごと", "活動計画"),
   ).slice(0, 1200);
 
-  /** @type {string[]} */
   const combinedBullets =
     bulletsSupport.length > 0
       ? bulletsSupport
@@ -276,29 +509,134 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
           0,
           14,
         );
+
+  let comprehensiveSupportPolicy =
+    stripInlineMd(pickSection(sections, "支援方針")).replace(/\s+/g, " ").trim() ||
+    "";
+  if (!stripInlineMd(comprehensiveSupportPolicy).replace(/\s+/g, "").length) {
+    comprehensiveSupportPolicy = truncatePlain(
+      pickSection(
+        sections,
+        "支援計画概要",
+        "支援のねらい",
+        "総合支援",
+      ),
+      900,
+    );
+  }
+  if (!stripInlineMd(comprehensiveSupportPolicy).replace(/\s+/g, "").length) {
+    comprehensiveSupportPolicy = truncatePlain(
+      `${issueBackground} ${String(child?.notes ?? "").trim()}`.trim(),
+      900,
+    );
+  }
+  if (!stripInlineMd(comprehensiveSupportPolicy).replace(/\s+/g, "").length) {
+    comprehensiveSupportPolicy =
+      "総合支援方針として、本人の状態・家族意向・環境要件を総合して安全と発達両立に配慮し、サービスにおける支援を継続的に組み立てることとする。";
+  }
+
+  const lt = pickLongTerm(child?.goals, familyAi, child?.disability);
+
+  const shortTermGoalsList = parseShortTermGoals(shortRaw, [...shortFallback], {
+    ltContent: lt.content,
+    comprehensive: comprehensiveSupportPolicy,
+    combinedBullets,
+  });
+
   const domainsContent = distributeBulletsAcrossDomains(
     combinedBullets.length ? combinedBullets : [monthlySnippet].filter(Boolean),
+  );
+
+  const goalBodiesForDomains = dedupeGoalBodies([
+    ...extractGoalBodiesFromShortTerm(shortRaw),
+    ...shortFallback.map((x) => normalizeGoalSentence(x)),
+  ]);
+
+  const ltNarrative = String(lt.content || comprehensiveSupportPolicy || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 900);
+
+  const domainSupportTargets = buildDomainSupportTargets(
+    goalBodiesForDomains,
+    combinedBullets,
+    ltNarrative,
+    domainsContent,
   );
 
   const domainRows = SUPPORT_DOMAINS.map((domainLabel, i) => ({
     category: "本人支援",
     domain: domainLabel,
-    supportTarget:
-      shortTermGoalsList[i]?.content ||
-      `${domainLabel}の領域で、現在の様子(${child?.disability || "※障害種別"})と整合する達成見込みのある支援目標を設定すること。`,
+    supportTarget: domainSupportTargets[i],
     supportContent:
       domainsContent[i]?.join("\n") ||
-      "※実施する具体的援助内容・配慮（環境構成・教具・声かけ頻度等）を計画してください。",
+      `${domainLabel}の観点で、観察に基づき援助内容および環境・声かけ等の調整を活動過程へ反映すること。`,
     priority: `${i + 1}`,
   }));
 
+  const cn = String(child?.childName ?? child?.name ?? "").trim();
+
+  const regionalSupportRow = {
+    category: "地域支援",
+    domain: "",
+    supportTarget:
+      truncatePlain(
+        pickSection(sections, "地域", "関係機関", "協議").slice(0, 650),
+        420,
+      ) ||
+      "関係機関との情報共有および必要時の協議・調整を通じて、一体的支援の質を確保すること。",
+    supportContent: synthesizeRegionalBody(familyAi, issueBackground, cn),
+    priority: "—",
+  };
+
+  const famGoal =
+    truncatePlain(familyAi, 360) ||
+    `${cn ? `${cn}さん` : "ご本人"}の家庭生活における安心の確保と、養護者の過負担防止に資する協働的支援として支援を構成すること。`;
+
+  const famBodyPieces = [];
+  if (familyAi.length >= 8) famBodyPieces.push(truncatePlain(familyAi, 1150));
+  const gFam = stripInlineMd(String(child?.goals ?? "")).trim();
+  if (gFam.length >= 6)
+    famBodyPieces.push(`【家族意向／ねらい（アセスメント）】\n${truncatePlain(gFam, 520)}`);
+  if (issueBackground.length >= 8)
+    famBodyPieces.push(`（課題の背景との関連）${truncatePlain(issueBackground, 440)}`);
+
   const familyIntentions = computeFamilyIntentions(child, issueBackground, familyAi);
 
+  const familySupportRow = {
+    category: "家族支援",
+    domain: "",
+    supportTarget: famGoal,
+    supportContent:
+      famBodyPieces.filter(Boolean).join("\n\n").trim() ||
+      truncatePlain(familyIntentions, 1200),
+    priority: "—",
+  };
+
+  const provisionSynth = synthesizeProvisionText(sections);
+  const standardProvision =
+    String(child?.standardSupportProvision ?? "").trim() ||
+    provisionSynth ||
+    "施設および利用契約に定める提供時間・頻度・曜日のもと計画的にサービス時間内において実施する。";
+
+  const transitionAi = stripInlineMd(pickSection(sections, "移行", "卒園", "就学")).trim();
+
+  const transitionSupportContent =
+    transitionAi.trim().length >= 12
+      ? transitionAi.slice(0, 900)
+      : `${cn ? `${cn}さん` : "本人"}について、異動・就学などの環境転換がある場合には準備と関係調整を内容に組み込み、当面の転換見込みがない場合にも継続的な安定支援の根拠を残す運用として記録する。`;
+
   return {
-    titleLine: "個別支援計画書（児童発達支援サービス／参考様式自動整形）",
-    childName: String(child?.childName ?? child?.name ?? "").trim(),
+    titleLine: "個別支援計画書",
+
+    footerExplainer:
+      "提供する支援内容について、本計画書に基づき説明しました。",
+
+    childName: cn,
     birthDateDisplay: formatBirthDateJp(child?.birthDate ?? ""),
-    ageDisplay: String(child?.age ?? "").trim() || "※年齢",
+    ageDisplay:
+      String(child?.age ?? "").trim()
+      || estimateAgeJpFromBirthYYYY_MM_DD(child?.birthDate, planCreatedIso),
     disabilityHint: String(child?.disability ?? "").trim(),
     creationDateJp: formatPlanCreationDateJp(planCreatedIso),
 
@@ -311,54 +649,32 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
 
     longTermGoal: lt,
 
-    shortTermGoals: shortTermGoalsList.slice(0, 3),
+    shortTermGoals: shortTermGoalsList.slice(0, 6),
 
     domainRows,
 
-    cooperationRow: (() => {
-      const coopBits = [];
-      if (child?.name) {
-        coopBits.push(
-          `${child.name}さんについて、行政・学校・保育・医療等との定期的な情報共有および家庭への支援提案を実施します。`,
-        );
-      }
-      if (issueBackground) {
-        coopBits.push(`（課題の背景：${issueBackground.slice(0, 420)}）`);
-      }
-      const coopFallback = coopBits.join("\n");
-      return {
-        category: "地域支援・連携",
-        domain: "家庭・地域との連携",
-        supportTarget:
-          "保育施設／学校／医療・相談支援等との情報共有および家庭支援",
-        supportContent:
-          stripInlineMd(familyAi || coopFallback).trim() ||
-          "ご家庭および関係機関との連携方針を具体的に記入してください。",
-        priority: "—",
-      };
-    })(),
+    familySupportRow,
+    regionalSupportRow,
+    cooperationRow: regionalSupportRow,
 
     transitionRow: {
       category: "移行支援",
-      domain: "段階的支援・異動準備",
-      supportTarget: "次の段階的支援・移行準備へのつながりを確保する",
-      supportContent:
-        stripInlineMd(
-          pickSection(sections, "移行", "卒園", "就学").slice(0, 900),
-        ).trim() ||
-        "就学・異動などの予定がある場合、その準備および関係機関との調整について記載する。現在は特になし場合はその旨記載のこと。",
+      domain: "",
+      supportTarget:
+        truncatePlain(transitionAi, 340) ||
+        "異動や就学準備への段階的つながりを確保し、環境転換における情報共有と協働により本人の適応支援を進めること。",
+      supportContent: transitionSupportContent,
       priority: "—",
     },
 
-    standardProvision: String(child?.standardSupportProvision ?? "").trim() ||
-      "※例：〇曜日〜〇曜／週〇回／サービス時間内での提供（サービス単位時間に準拠）。具体的に入力してください。",
+    standardProvision,
 
     managerName: String(child?.managerName ?? "").trim(),
 
     parentSignaturePlaceholder:
-      "保護者氏名 ______________ 印    作成日 ____年 ____月 ____日",
+      "",
     footerNote: PLAN_FORM_FOOTNOTE,
     rawMarkdown: programText ?? "",
-    version: "hc-formal-plan-v1",
+    version: "hc-formal-plan-v2",
   };
 }

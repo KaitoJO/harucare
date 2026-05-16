@@ -1,32 +1,44 @@
 const cellBd = {
-  border: "1px solid #1a1a1a",
+  border: "1px solid #000",
+};
+
+const PAGE_W_MM = 186;
+
+const thGray = {
+  background: "#e8eae8",
+  fontWeight: 700,
+  textAlign: "left",
 };
 
 const tdBase = {
   ...cellBd,
-  padding: "6px 8px",
-  fontSize: 10.5,
-  lineHeight: 1.55,
+  padding: "4px 6px",
+  fontSize: 9.2,
+  lineHeight: 1.42,
   verticalAlign: "top",
   wordBreak: "break-word",
   whiteSpace: "pre-wrap",
 };
 
-function SectionTitle({ children }) {
-  return (
-    <div
-      style={{
-        ...cellBd,
-        background: "#e8ebe8",
-        fontWeight: 700,
-        fontSize: 10.8,
-        padding: "6px 8px",
-        marginBottom: 0,
-      }}
-    >
-      {children}
-    </div>
-  );
+const thBase = {
+  ...tdBase,
+  ...thGray,
+};
+
+/** html2canvas スライスで行単位分割を試みる（{@link exportSupportPlanPdf}） */
+const pdfRowAvoid = {
+  breakInside: "avoid",
+  pageBreakInside: "avoid",
+};
+
+/** 印字用の全角スペース */
+const FW = "\u3000";
+
+function normalizeLines(s) {
+  return String(s || "")
+    .replace(/\s+/g, " ")
+    .replace(/\u3000/g, " ")
+    .trim();
 }
 
 /**
@@ -37,92 +49,184 @@ export function FormalSupportPlanPdfMount({ doc }) {
   const d = doc || {};
   const stm = Array.isArray(d.shortTermGoals) ? d.shortTermGoals : [];
 
+  const namePart = d.childName
+    ? `利用児氏名：${d.childName}`
+    : `利用児氏名：${FW.repeat(8)}`;
+  const dob =
+    String(d.birthDateDisplay || "").trim() || `${FW.repeat(4)}年${FW.repeat(2)}月${FW.repeat(2)}日`;
+  const age = String(d.ageDisplay || "").trim();
+  const childLine = normalizeLines(
+    age
+      ? `${namePart}（生年月日：${dob}${FW}${age}）`
+      : `${namePart}（生年月日：${dob}）`,
+  );
+
+  const disabilityLine = normalizeLines(String(d.disabilityHint ?? "").trim())
+    ? `障害種別等：${String(d.disabilityHint)}`
+    : "";
+
+  const longTermGoal = d.longTermGoal || {};
+  const footerExplainer =
+    typeof d.footerExplainer === "string"
+      ? d.footerExplainer
+      : "提供する支援内容について、本計画書に基づき説明しました。";
+
+  const domainRows = d.domainRows || [];
+  const familyRow = d.familySupportRow || null;
+  const transitionRow = d.transitionRow || null;
+  const regionalRow = d.regionalSupportRow ?? d.cooperationRow ?? null;
+
+  function formatOfficialDomainRow(row, key) {
+    if (!row) return null;
+    const dom = normalizeLines(String(row.domain ?? ""));
+    const tgt = normalizeLines(String(row.supportTarget ?? ""));
+    const body = normalizeLines(String(row.supportContent ?? ""));
+    const goalMerged = dom
+      ? `【観点：${dom.slice(0, 48)}${dom.length > 48 ? "…" : ""}】\n${tgt}`.trim()
+      : tgt;
+    return (
+      <tr key={key} data-pdf-avoid-split="" style={pdfRowAvoid}>
+        <td style={{ ...tdBase, width: "11%", textAlign: "center", fontWeight: 600 }}>
+          {row.category ?? "本人支援"}
+        </td>
+        <td style={{ ...tdBase, width: "31%" }}>{goalMerged || "—"}</td>
+        <td style={{ ...tdBase, width: "52%" }}>{body || "—"}</td>
+        <td style={{ ...tdBase, width: "6%", textAlign: "center" }}>
+          {row.priority ?? "—"}
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <div
       className="support-plan-pdf-root"
       style={{
-        width: 800,
-        maxWidth: 800,
+        width: `${PAGE_W_MM}mm`,
+        maxWidth: `${PAGE_W_MM}mm`,
         boxSizing: "border-box",
-        padding: "8px 6px 14px",
+        padding: "3mm 2mm 4mm",
         background: "#fff",
-        color: "#111",
+        color: "#000",
         fontFamily:
-          "'Noto Sans JP', 'MS Mincho', 'Hiragino Mincho ProN', serif",
-        fontSize: 10.6,
+          "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', sans-serif",
+        fontSize: 9.25,
       }}
     >
-      <div style={{ textAlign: "center", marginBottom: 10 }}>
-        <div style={{ fontSize: 16, fontWeight: 700 }}>
-          {d.titleLine || "個別支援計画書"}
-        </div>
-        <div style={{ fontSize: 9.2, color: "#333", marginTop: 6 }}>
-          {d.footerNote}
-        </div>
-      </div>
-
       <table
         cellPadding={0}
         cellSpacing={0}
         style={{
-          ...cellBd,
           borderCollapse: "collapse",
           width: "100%",
-          marginBottom: 8,
+          marginBottom: 5,
+          ...cellBd,
+          tableLayout: "fixed",
         }}
       >
         <tbody>
-          <tr>
-            <th
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <td
               style={{
                 ...tdBase,
-                background: "#f2f5f2",
-                width: "16%",
+                borderBottom: cellBd.border,
+                textAlign: "center",
+                fontSize: 15,
+                fontWeight: 800,
               }}
+              colSpan={2}
             >
-              利用者氏名
-            </th>
-            <td style={{ ...tdBase, width: "44%" }}>
-              {d.childName || "　　　　　　　　　　"}
-              {"\n障害種別等："}
-              {d.disabilityHint || "　　　　　　　　　　"}
-            </td>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "14%" }}>
-              作成日
-            </th>
-            <td style={{ ...tdBase, width: "26%" }}>
-              {d.creationDateJp || "　　　　年　　月　　日"}
+              {typeof d.titleLine === "string" ? d.titleLine : "個別支援計画書"}
             </td>
           </tr>
-          <tr>
-            <th style={{ ...tdBase, background: "#f2f5f2" }}>生年月日</th>
-            <td style={{ ...tdBase }}>
-              {d.birthDateDisplay?.trim()
-                ? d.birthDateDisplay
-                : "　　　　　年　　　　月　　　　日"}
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <td style={{ ...tdBase, width: "70%", fontSize: 9.25 }}>{childLine}</td>
+            <td style={{ ...tdBase, width: "30%", fontSize: 9.25, verticalAlign: "top" }}>
+              作成年月日：
+              {String(d.creationDateJp ?? "").trim() ||
+                `${FW.repeat(4)}年${FW.repeat(4)}月${FW.repeat(2)}日`}
             </td>
-            <th style={{ ...tdBase, background: "#f2f5f2" }}>満年齢</th>
-            <td style={{ ...tdBase }}>{d.ageDisplay || ""}</td>
+          </tr>
+          {disabilityLine ? (
+            <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+              <td colSpan={2} style={{ ...tdBase, fontSize: 8.85 }}>
+                {disabilityLine}
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      <table
+        cellPadding={0}
+        cellSpacing={0}
+        style={{
+          borderCollapse: "collapse",
+          width: "100%",
+          marginBottom: 5,
+          tableLayout: "fixed",
+          ...cellBd,
+        }}
+      >
+        <tbody>
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <th style={{ ...thBase, width: "20%" }}>
+              利用児及び家族の生活に対する意向
+            </th>
+            <td colSpan={2} style={{ ...tdBase, minHeight: 48 }}>
+              {String(d.familyIntentions ?? "").trim()}
+            </td>
+          </tr>
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <th style={{ ...thBase }}>総合的な支援の方針</th>
+            <td colSpan={2} style={{ ...tdBase, minHeight: 44 }}>
+              {String(d.comprehensiveSupportPolicy ?? "").trim()}
+            </td>
+          </tr>
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <th style={{ ...thBase, width: "20%" }}>
+              {"長期目標\n（内容・期間等）"}
+            </th>
+            <td style={{ ...tdBase, width: "53%" }}>
+              【内容】{longTermGoal.content}
+              {"\n"}
+              【期間等】{longTermGoal.period}
+            </td>
+            <td
+              rowSpan={2}
+              style={{
+                ...tdBase,
+                width: "27%",
+                borderLeft: cellBd.border,
+              }}
+            >
+              <span style={{ fontWeight: 700, display: "block", marginBottom: 6 }}>
+                支援の標準的な提供時間等
+                {"\n"}
+                （曜日・頻度、時間）
+              </span>
+              {String(d.standardProvision ?? "").trim()}
+            </td>
+          </tr>
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <th style={{ ...thBase }}>
+              {"短期目標\n（内容・期間等）"}
+            </th>
+            <td style={{ ...tdBase }}>
+              {stm.slice(0, 6).map((row, i) => (
+                <div key={`st-${String(i)}`} style={{ marginBottom: row?.content ? 6 : 0 }}>
+                  【短期ねらい{i + 1}（内容）】{row.content}
+                  {"\n"}
+                  【期間等】{row.periodGuess ?? ""}
+                </div>
+              ))}
+            </td>
           </tr>
         </tbody>
       </table>
 
-      <div style={{ border: cellBd.border, marginBottom: 8 }}>
-        <SectionTitle>
-          （１）利用者及び家族の生活に対する意向並びに申告の内容、その他留意事項を踏まえたサービスが必要となる理由と目的
-        </SectionTitle>
-        <div style={{ ...tdBase, border: "none", minHeight: 56 }}>
-          {d.familyIntentions}
-        </div>
-      </div>
-
-      <div style={{ border: cellBd.border, marginBottom: 8 }}>
-        <SectionTitle>
-          （２）サービスにおいて総合的に目指すべき具体的なねらい及びサービスにおいて支援すべき項目等（総合的な支援の方針）
-        </SectionTitle>
-        <div style={{ ...tdBase, border: "none", minHeight: 52 }}>
-          {d.comprehensiveSupportPolicy}
-        </div>
+      <div style={{ fontWeight: 700, marginBottom: 3, fontSize: 9.4 }}>
+        ○支援目標及び具体的な支援内容
       </div>
 
       <table
@@ -131,146 +235,72 @@ export function FormalSupportPlanPdfMount({ doc }) {
         style={{
           borderCollapse: "collapse",
           width: "100%",
+          marginBottom: 6,
+          tableLayout: "fixed",
           ...cellBd,
-          marginBottom: 8,
         }}
       >
-        <tbody>
-          <tr>
-            <th rowSpan={2} style={{ ...tdBase, background: "#f2f5f2", width: "14%" }}>
-              長期目標（内容・期間等）
-            </th>
-            <td style={{ ...tdBase, borderBottom: "none" }}>
-              【内容】{d.longTermGoal?.content}
-            </td>
-          </tr>
-          <tr>
-            <td style={{ ...tdBase }}>
-              【期間等】{d.longTermGoal?.period}
-            </td>
-          </tr>
-          {[0, 1, 2].map((i) => {
-            const row = stm[i];
-            const content =
-              row?.content ||
-              "※短期的な到達項目を、アセスメントとAI出力に基づき具体的に記入してください。";
-            const pd = row?.periodGuess || "計画開始から適宜見直す";
-            return (
-              <tr key={`stm-${i}`}>
-                <th style={{ ...tdBase, background: "#f2f5f2" }}>
-                  短期目標{i + 1}
-                  {"\n"}
-                  （内容・期間等）
-                </th>
-                <td style={{ ...tdBase }}>
-                  【内容】{content}
-                  {"\n"}
-                  【期間等】{pd}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      <div style={{ border: cellBd.border, marginBottom: 8 }}>
-        <SectionTitle>（３）支援の標準的な提供時間等（施設サービス）</SectionTitle>
-        <div style={{ ...tdBase, border: "none", minHeight: 36 }}>
-          {d.standardProvision}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 4, fontWeight: 700 }}>
-        （４）支援項目に応じた支援目標・具体的支援内容／優先順位
-      </div>
-      <table
-        cellPadding={0}
-        cellSpacing={0}
-        style={{ borderCollapse: "collapse", width: "100%", marginBottom: 10 }}
-      >
         <thead>
-          <tr>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "12%" }}>
-              項目区分
-            </th>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "18%" }}>
-              対象／領域
-            </th>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "30%" }}>
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <th style={{ ...thBase, width: "11%", textAlign: "center" }}>項目</th>
+            <th style={{ ...thBase, width: "31%" }}>
               支援目標
+              {"\n"}
+              （具体的な到達目標）
             </th>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "31%" }}>
-              支援内容（生活・運動／感覚・認知・言語／コミュニケーション・対人などの観点を含める）
+            <th style={{ ...thBase, width: "52%" }}>
+              支援内容
+              {"\n"}
+              （内容・支援の提供上のポイント・5領域）
             </th>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "9%" }}>順位</th>
+            <th style={{ ...thBase, width: "6%", textAlign: "center" }}>優先順位</th>
           </tr>
         </thead>
         <tbody>
-          {(d.domainRows || []).map((row, i) => (
-            <tr key={`dr-${i}`}>
-              <td style={{ ...tdBase }}>{row.category}</td>
-              <td style={{ ...tdBase }}>{row.domain}</td>
-              <td style={{ ...tdBase }}>{row.supportTarget}</td>
-              <td style={{ ...tdBase }}>{row.supportContent}</td>
-              <td style={{ ...tdBase }}>{row.priority}</td>
-            </tr>
-          ))}
-          {d.transitionRow ? (
-            <tr>
-              <td style={{ ...tdBase }}>{d.transitionRow.category}</td>
-              <td style={{ ...tdBase }}>{d.transitionRow.domain}</td>
-              <td style={{ ...tdBase }}>{d.transitionRow.supportTarget}</td>
-              <td style={{ ...tdBase }}>{d.transitionRow.supportContent}</td>
-              <td style={{ ...tdBase }}>{d.transitionRow.priority}</td>
-            </tr>
-          ) : null}
-          {d.cooperationRow ? (
-            <tr>
-              <td style={{ ...tdBase }}>{d.cooperationRow.category}</td>
-              <td style={{ ...tdBase }}>{d.cooperationRow.domain}</td>
-              <td style={{ ...tdBase }}>{d.cooperationRow.supportTarget}</td>
-              <td style={{ ...tdBase }}>{d.cooperationRow.supportContent}</td>
-              <td style={{ ...tdBase }}>{d.cooperationRow.priority}</td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-
-      <table
-        cellPadding={0}
-        cellSpacing={0}
-        style={{ borderCollapse: "collapse", width: "100%" }}
-      >
-        <tbody>
-          <tr>
-            <th style={{ ...tdBase, background: "#f2f5f2", width: "28%" }}>
-              児童発達支援管理責任者氏名
-            </th>
-            <td style={{ ...tdBase, minHeight: 40 }}>
-              {d.managerName || "　　　　　　　　　　　　　　　　（署名・押印省略可・施設運用時に記載）"}
-            </td>
-          </tr>
-          <tr>
-            <th style={{ ...tdBase, background: "#f2f5f2" }}>
-              保護者署名・説明済みの確認
-            </th>
-            <td style={{ ...tdBase, minHeight: 52 }}>
-              {d.parentSignaturePlaceholder}
-            </td>
-          </tr>
+          {domainRows.map((row, i) => formatOfficialDomainRow(row, `dr-${String(i)}`))}
+          {formatOfficialDomainRow(familyRow, "fam")}
+          {formatOfficialDomainRow(transitionRow, "tr")}
+          {formatOfficialDomainRow(regionalRow, "reg")}
         </tbody>
       </table>
 
       <div
         style={{
-          marginTop: 14,
           fontSize: 9,
-          color: "#333",
-          lineHeight: 1.5,
+          marginBottom: 8,
+          lineHeight: 1.55,
+          border: cellBd.border,
+          padding: "6px 8px",
         }}
       >
-        【留意】自動生成済みドラフトであり、サービス単位での内容確認と施設側の是正・追加記載後に公的に適合する状態に調整すること。
+        {footerExplainer}
       </div>
+
+      <table
+        cellPadding={0}
+        cellSpacing={0}
+        style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", ...cellBd }}
+      >
+        <tbody>
+          <tr style={pdfRowAvoid} data-pdf-avoid-split="">
+            <th style={{ ...thBase, width: "28%" }}>
+              児童発達支援管理責任者氏名
+            </th>
+            <td style={{ ...tdBase, minHeight: 40, width: "42%" }} />
+            <td
+              style={{
+                ...tdBase,
+                width: "30%",
+                textAlign: "right",
+                verticalAlign: "bottom",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {`${FW.repeat(4)}年${FW.repeat(2)}月${FW.repeat(2)}日${FW.repeat(4)}（保護者署名）`}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
