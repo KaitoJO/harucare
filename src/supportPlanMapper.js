@@ -14,7 +14,7 @@
  * }} ChildLike */
 
 export const PLAN_FORM_FOOTNOTE =
-  "※本書は児童発達支援の個別支援計画について、福祉・衛生関係告示（様式第二十）および厚生労働省の例示（令和元年版）を参考に自動整形しています。";
+  "※本書は児童発達支援の個別支援計画について、福祉・衛生関係告示（様式第二十）および厚生労働省の例示（令和6年版）に沿って作成しています。";
 
 /** @type {readonly string[]} */
 export const SUPPORT_DOMAINS = Object.freeze([
@@ -652,10 +652,10 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
       : `${cn ? `${cn}さん` : "本人"}について、異動・就学などの環境転換がある場合には準備と関係調整を内容に組み込み、当面の転換見込みがない場合にも継続的な安定支援の根拠を残す運用として記録する。`;
 
   return {
-    formatId: "harucare-v1",
+    formatId: "mhlw-r6-official",
     titleLine: "個別支援計画書",
-    subtitleLine: "《原案》",
-    planPeriodLabel: "第1期",
+    subtitleLine: "",
+    planPeriodLabel: "",
     goalStartDateJp,
     defaultSupportPeriod,
 
@@ -710,10 +710,10 @@ export function buildFormalPlanDocument(child, programText, planCreatedIso) {
 
     managerName: String(child?.managerName ?? "").trim(),
 
-    parentSignaturePlaceholder:
-      "",
+    parentSignaturePlaceholder: "",
+    /** 画面用。PDFには出力しない */
     footerNote: PLAN_FORM_FOOTNOTE,
     rawMarkdown: programText ?? "",
-    version: "hc-harucare-plan-v1",
+    version: "mhlw-formal-r6-v1",
   };
 }
