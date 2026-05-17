@@ -44,10 +44,38 @@ const HOME_MENU_ITEMS = [
     screen: "hiyari",
   },
   {
+    id: "specialized-plan",
+    title: "専門的支援計画",
+    description: "専門的支援計画の作成・管理",
+    icon: "📑",
+    available: false,
+  },
+  {
     id: "accident",
     title: "事故報告書",
     description: "事故・インシデントの報告",
     icon: "📝",
+    available: false,
+  },
+  {
+    id: "family-support",
+    title: "家族支援加算",
+    description: "家族支援の記録・加算要件の整理",
+    icon: "👨‍👩‍👧",
+    available: false,
+  },
+  {
+    id: "parenting-support",
+    title: "子育てサポート",
+    description: "保護者向けサポートの記録・共有",
+    icon: "🌱",
+    available: false,
+  },
+  {
+    id: "shift",
+    title: "シフト作成",
+    description: "職員シフトの作成・調整",
+    icon: "📅",
     available: false,
   },
   {
