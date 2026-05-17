@@ -25,6 +25,40 @@ const AGE_OPTIONS = ["1歳", "2歳", "3歳", "4歳", "5歳", "6歳"];
 const LEVELS = ["低", "中", "高"];
 const SEVERITY = ["軽度", "中度", "重度"];
 
+/** ログイン後トップ：機能選択ダッシュボード */
+const HOME_MENU_ITEMS = [
+  {
+    id: "plan",
+    title: "個別支援計画",
+    description: "お子さま一覧・支援計画の作成・保存",
+    icon: "📋",
+    available: true,
+    screen: "list",
+  },
+  {
+    id: "hiyari",
+    title: "ヒヤリハット",
+    description: "気づきの記録・共有（準備中）",
+    icon: "⚠️",
+    available: true,
+    screen: "hiyari",
+  },
+  {
+    id: "accident",
+    title: "事故報告書",
+    description: "事故・インシデントの報告",
+    icon: "📝",
+    available: false,
+  },
+  {
+    id: "case",
+    title: "療育の事例出し",
+    description: "事例の整理・参照",
+    icon: "💡",
+    available: false,
+  },
+];
+
 function matchesListDisabilityFilter(disability, filterId) {
   if (filterId === "all") return true;
   if (filterId === "autism") return disability === "自閉スペクトラム症";
@@ -1111,7 +1145,7 @@ export default function App() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [childSaveBusy, setChildSaveBusy] = useState(false);
 
-  const [screen, setScreen] = useState("list");
+  const [screen, setScreen] = useState("home");
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   const [editingChildId, setEditingChildId] = useState(null);
@@ -1224,7 +1258,7 @@ export default function App() {
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
         setSelectedHistoryEntry(null);
-        setScreen("list");
+        setScreen("home");
         setEditingChildId(null);
         setEditingOriginalName(null);
         setForm({
@@ -1873,6 +1907,10 @@ export default function App() {
   const goBack = () => {
     if (loading) return;
     setError(null);
+    if (screen === "list" || screen === "hiyari") {
+      setScreen("home");
+      return;
+    }
     if (screen === "add") {
       resetChildForm();
       setScreen("list");
@@ -1908,7 +1946,7 @@ export default function App() {
       setScreen("savedChildHistory");
       return;
     }
-    setScreen("list");
+    setScreen("home");
   };
 
   const s = {
@@ -2082,7 +2120,7 @@ export default function App() {
   return (
     <div style={s.wrap} className="app-root">
       <div style={s.header}>
-        {screen !== "list" && (
+        {screen !== "home" && (
           <button
             type="button"
             onClick={() => {
@@ -2120,7 +2158,9 @@ export default function App() {
             HaruCare AI
           </div>
           <div style={{ fontSize: 10, color: "#8a9a8a" }}>
-            個別発達支援プログラム管理
+            {screen === "home"
+              ? "機能メニュー"
+              : "個別発達支援プログラム管理"}
           </div>
         </div>
         <div
@@ -2222,6 +2262,163 @@ export default function App() {
             }}
           >
             データを読み込み中…
+          </div>
+        )}
+        {screen === "home" && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#2a3a2a",
+                  marginBottom: 4,
+                }}
+              >
+                機能を選択
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: "#6a7a6a",
+                  lineHeight: 1.55,
+                }}
+              >
+                利用する機能を選んでください。
+              </p>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              {HOME_MENU_ITEMS.map((item) => {
+                const comingSoon = !item.available;
+                const cardInner = (
+                  <>
+                    {comingSoon ? (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 10,
+                          right: 10,
+                          padding: "3px 8px",
+                          borderRadius: 20,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          background: "#f0f0f0",
+                          color: "#666",
+                        }}
+                      >
+                        近日公開
+                      </span>
+                    ) : null}
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>{item.icon}</div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: comingSoon ? "#8a9a8a" : "#2a3a2a",
+                        marginBottom: 6,
+                        lineHeight: 1.35,
+                        paddingRight: comingSoon ? 52 : 0,
+                      }}
+                    >
+                      {item.title}
+                    </div>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 11,
+                        color: "#7a8a7a",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {item.description}
+                    </p>
+                  </>
+                );
+                if (comingSoon) {
+                  return (
+                    <div
+                      key={item.id}
+                      aria-disabled="true"
+                      style={{
+                        ...s.card,
+                        position: "relative",
+                        marginBottom: 0,
+                        opacity: 0.72,
+                        cursor: "not-allowed",
+                      }}
+                    >
+                      {cardInner}
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setScreen(item.screen)}
+                    style={{
+                      ...s.card,
+                      position: "relative",
+                      marginBottom: 0,
+                      width: "100%",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      border: "2px solid #e0eae0",
+                      fontFamily: "inherit",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    {cardInner}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {screen === "hiyari" && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#2a3a2a",
+                  marginBottom: 4,
+                }}
+              >
+                ヒヤリハット
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: "#6a7a6a",
+                  lineHeight: 1.55,
+                }}
+              >
+                この機能は現在準備中です。記録・共有画面は今後追加されます。
+              </p>
+            </div>
+            <div style={{ ...s.card, textAlign: "center", padding: 28 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: "#5a6a5a",
+                  lineHeight: 1.6,
+                }}
+              >
+                ヒヤリハット記録は近日実装予定です。
+              </p>
+            </div>
           </div>
         )}
         {screen === "list" && (
