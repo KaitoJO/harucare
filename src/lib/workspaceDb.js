@@ -105,6 +105,19 @@ function planFeedbackFromRow(r) {
   };
 }
 
+function hiyariHattoFromRow(r) {
+  return {
+    id: r.id,
+    childId: r.child_id ?? null,
+    childName: r.child_name ?? "",
+    occurredAt: r.occurred_at,
+    location: r.location ?? "",
+    situation: r.situation ?? "",
+    analysisText: r.analysis_text ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {string} userId
@@ -117,6 +130,7 @@ export async function fetchWorkspace(supabase, userId) {
     { data: sdRows, error: e4 },
     { data: pcRows, error: e5 },
     { data: pfRows, error: e6 },
+    { data: hhRows, error: e7 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -128,8 +142,13 @@ export async function fetchWorkspace(supabase, userId) {
     supabase.from("saved_support_diaries").select("*").eq("user_id", userId),
     supabase.from("saved_parent_contacts").select("*").eq("user_id", userId),
     supabase.from("plan_feedbacks").select("*").eq("user_id", userId),
+    supabase
+      .from("hiyari_hatto_records")
+      .select("*")
+      .eq("user_id", userId)
+      .order("occurred_at", { ascending: false }),
   ]);
-  const err = e1 || e2 || e3 || e4 || e5 || e6;
+  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -138,6 +157,7 @@ export async function fetchWorkspace(supabase, userId) {
     savedSupportDiaries: (sdRows ?? []).map(diaryFromRow),
     savedParentContacts: (pcRows ?? []).map(contactFromRow),
     planFeedbacks: (pfRows ?? []).map(planFeedbackFromRow),
+    hiyariHattoRecords: (hhRows ?? []).map(hiyariHattoFromRow),
   };
 }
 
@@ -305,6 +325,21 @@ export async function insertPlanFeedback(supabase, userId, entry) {
     child_id: String(entry.childId),
     program_text: entry.programText,
     rating: entry.rating,
+    created_at: entry.createdAt,
+  });
+  if (error) throw error;
+}
+
+export async function insertHiyariHattoRecord(supabase, userId, entry) {
+  const { error } = await supabase.from("hiyari_hatto_records").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName ?? "",
+    occurred_at: entry.occurredAt,
+    location: entry.location ?? "",
+    situation: entry.situation ?? "",
+    analysis_text: entry.analysisText ?? "",
     created_at: entry.createdAt,
   });
   if (error) throw error;

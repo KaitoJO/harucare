@@ -38,7 +38,7 @@ const HOME_MENU_ITEMS = [
   {
     id: "hiyari",
     title: "ヒヤリハット",
-    description: "気づきの記録・共有（準備中）",
+    description: "気づきの記録・AI分析・保存",
     icon: "⚠️",
     available: true,
     screen: "hiyari",
@@ -236,6 +236,39 @@ function todayYyyyMmDd() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function nowTimeHm() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function createDefaultHiyariForm() {
+  return {
+    occurredDate: todayYyyyMmDd(),
+    occurredTime: nowTimeHm(),
+    location: "",
+    childMode: "select",
+    childId: "",
+    childNameCustom: "",
+    situation: "",
+  };
+}
+
+function buildHiyariOccurredIso(dateStr, timeStr) {
+  const d = String(dateStr || todayYyyyMmDd()).trim();
+  const t = String(timeStr || "12:00").trim();
+  const [y, m, day] = d.split("-").map(Number);
+  const [hh, mm] = t.split(":").map((x) => Number(x) || 0);
+  return new Date(y, m - 1, day, hh, mm, 0, 0).toISOString();
+}
+
+function resolveHiyariChildLabel(form, childrenList) {
+  if (form.childMode === "custom") {
+    return String(form.childNameCustom ?? "").trim() || "（直接入力・未記入）";
+  }
+  const hit = childrenList.find((c) => String(c.id) === String(form.childId));
+  return hit?.name ?? "（未選択）";
 }
 
 function isoDateFromCreatedAt(iso) {
@@ -1138,6 +1171,38 @@ async function requestParentContactFromClaude(child, inputs) {
   });
 }
 
+const HIYARI_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの安全管理・ヒヤリハット分析の専門家です。
+施設スタッフが報告したヒヤリハット（事故には至らなかったが危険があった事象）について、要因分析・推奨対応・再発防止策を日本語で出力してください。
+
+出力形式（必ずこの見出し順・Markdown）：
+## 要因分析
+## 推奨対応
+## 再発防止策
+
+・現場ですぐ実行できる具体性で書くこと。
+・責めるトーンは避け、安全文化の改善に焦点を当てること。
+・前置き・謝罪・締めの定型文は不要。本文のみ。`;
+
+function buildHiyariAnalysisUserPrompt(form, childLabel) {
+  return `【ヒヤリハット報告】
+発生日時：${form.occurredDate} ${form.occurredTime}
+発生場所：${String(form.location ?? "").trim() || "（未入力）"}
+関係する子ども：${childLabel}
+
+【発生状況】
+${String(form.situation ?? "").trim() || "（未入力）"}
+
+上記に基づき、要因分析・推奨対応・再発防止策を出力してください。`;
+}
+
+async function requestHiyariAnalysisFromClaude(form, childLabel) {
+  return requestClaudeCompletion({
+    system: HIYARI_AI_SYSTEM,
+    userContent: buildHiyariAnalysisUserPrompt(form, childLabel),
+    max_tokens: 4096,
+  });
+}
+
 export default function App() {
   const supabase = useMemo(() => getSupabase(), []);
   const [session, setSession] = useState(null);
@@ -1204,6 +1269,11 @@ export default function App() {
   const [parentContactOutput, setParentContactOutput] = useState("");
   const [parentContactGeneratedAt, setParentContactGeneratedAt] = useState(null);
   const [parentContactAiLoading, setParentContactAiLoading] = useState(false);
+  const [hiyariForm, setHiyariForm] = useState(createDefaultHiyariForm);
+  const [hiyariAnalysis, setHiyariAnalysis] = useState("");
+  const [hiyariAiLoading, setHiyariAiLoading] = useState(false);
+  const [hiyariHattoRecords, setHiyariHattoRecords] = useState([]);
+  const [hiyariSaveBusy, setHiyariSaveBusy] = useState(false);
   const [listSearch, setListSearch] = useState("");
   const [listFilter, setListFilter] = useState("all");
   /** 支援計画生成時に API へ渡す追加プロンプト（詳細画面） */
@@ -1255,6 +1325,9 @@ export default function App() {
         setSavedSupportDiaries([]);
         setSavedParentContacts([]);
         setPlanFeedbacks([]);
+        setHiyariHattoRecords([]);
+        setHiyariForm(createDefaultHiyariForm());
+        setHiyariAnalysis("");
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
         setSelectedHistoryEntry(null);
@@ -1306,6 +1379,7 @@ export default function App() {
           setSavedSupportDiaries(w.savedSupportDiaries);
           setSavedParentContacts(w.savedParentContacts);
           setPlanFeedbacks(w.planFeedbacks);
+          setHiyariHattoRecords(w.hiyariHattoRecords ?? []);
         })
         .catch((e) => {
           if (!cancelled) {
@@ -1846,6 +1920,68 @@ export default function App() {
       showSaveToast();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleAnalyzeHiyari = async () => {
+    if (!hiyariForm.situation.trim()) {
+      setError("発生状況を入力してください。");
+      return;
+    }
+    setError(null);
+    setHiyariAiLoading(true);
+    try {
+      const childLabel = resolveHiyariChildLabel(hiyariForm, children);
+      const text = await requestHiyariAnalysisFromClaude(hiyariForm, childLabel);
+      setHiyariAnalysis(text);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setHiyariAiLoading(false);
+    }
+  };
+
+  const handleSaveHiyari = async () => {
+    if (!hiyariForm.situation.trim()) {
+      setError("発生状況を入力してください。");
+      return;
+    }
+    if (!hiyariAnalysis.trim()) {
+      setError("「AIで分析する」を実行し、分析結果を確認してから保存してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+    const childLabel = resolveHiyariChildLabel(hiyariForm, children);
+    const childId =
+      hiyariForm.childMode === "select" && hiyariForm.childId
+        ? hiyariForm.childId
+        : null;
+    const occurredAt = buildHiyariOccurredIso(
+      hiyariForm.occurredDate,
+      hiyariForm.occurredTime,
+    );
+    const createdAt = new Date().toISOString();
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childId,
+      childName: childLabel,
+      occurredAt,
+      location: hiyariForm.location.trim(),
+      situation: hiyariForm.situation.trim(),
+      analysisText: hiyariAnalysis.trim(),
+      createdAt,
+    };
+    setHiyariSaveBusy(true);
+    try {
+      await workspaceDb.insertHiyariHattoRecord(supabase, session.user.id, entry);
+      setHiyariHattoRecords((prev) => [entry, ...prev]);
+      setHiyariForm(createDefaultHiyariForm());
+      setHiyariAnalysis("");
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setHiyariSaveBusy(false);
     }
   };
 
@@ -2403,25 +2539,291 @@ export default function App() {
                   lineHeight: 1.55,
                 }}
               >
-                この機能は現在準備中です。記録・共有画面は今後追加されます。
+                発生状況を記録し、AIで要因分析・推奨対応・再発防止策を作成します。
               </p>
             </div>
-            <div style={{ ...s.card, textAlign: "center", padding: 28 }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-              <p
+
+            <div style={s.card}>
+              <div
                 style={{
-                  margin: 0,
-                  fontSize: 13,
-                  color: "#5a6a5a",
-                  lineHeight: 1.6,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                  marginBottom: 14,
                 }}
               >
-                ヒヤリハット記録は近日実装予定です。
-              </p>
+                <div>
+                  <label style={s.label}>発生日</label>
+                  <input
+                    type="date"
+                    value={hiyariForm.occurredDate}
+                    onChange={(e) =>
+                      setHiyariForm((f) => ({
+                        ...f,
+                        occurredDate: e.target.value,
+                      }))
+                    }
+                    style={s.input}
+                  />
+                </div>
+                <div>
+                  <label style={s.label}>発生時間</label>
+                  <input
+                    type="time"
+                    value={hiyariForm.occurredTime}
+                    onChange={(e) =>
+                      setHiyariForm((f) => ({
+                        ...f,
+                        occurredTime: e.target.value,
+                      }))
+                    }
+                    style={s.input}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>発生場所</label>
+                <input
+                  type="text"
+                  value={hiyariForm.location}
+                  onChange={(e) =>
+                    setHiyariForm((f) => ({ ...f, location: e.target.value }))
+                  }
+                  placeholder="例：送迎車内、ホール、トイレ前 など"
+                  style={s.input}
+                />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>関係する子ども</label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    marginBottom: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHiyariForm((f) => ({ ...f, childMode: "select" }))
+                    }
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      border:
+                        hiyariForm.childMode === "select"
+                          ? "2px solid #2d5a3d"
+                          : "2px solid #c8e0cc",
+                      background:
+                        hiyariForm.childMode === "select" ? "#2d5a3d" : "#fafcfa",
+                      color:
+                        hiyariForm.childMode === "select" ? "#fff" : "#2d5a3d",
+                    }}
+                  >
+                    一覧から選択
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHiyariForm((f) => ({ ...f, childMode: "custom" }))
+                    }
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      border:
+                        hiyariForm.childMode === "custom"
+                          ? "2px solid #2d5a3d"
+                          : "2px solid #c8e0cc",
+                      background:
+                        hiyariForm.childMode === "custom" ? "#2d5a3d" : "#fafcfa",
+                      color:
+                        hiyariForm.childMode === "custom" ? "#fff" : "#2d5a3d",
+                    }}
+                  >
+                    直接入力
+                  </button>
+                </div>
+                {hiyariForm.childMode === "select" ? (
+                  <select
+                    value={hiyariForm.childId}
+                    onChange={(e) =>
+                      setHiyariForm((f) => ({ ...f, childId: e.target.value }))
+                    }
+                    style={s.input}
+                  >
+                    <option value="">選択してください</option>
+                    {children.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={hiyariForm.childNameCustom}
+                    onChange={(e) =>
+                      setHiyariForm((f) => ({
+                        ...f,
+                        childNameCustom: e.target.value,
+                      }))
+                    }
+                    placeholder="お子さまの氏名を入力"
+                    style={s.input}
+                  />
+                )}
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>発生状況</label>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#7a8a7a",
+                    marginBottom: 8,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  何が起きたか、直前の状況・周囲の対応を具体的に（音声入力可）
+                </div>
+                <VoiceAppendTextarea
+                  value={hiyariForm.situation}
+                  onValueChange={(v) =>
+                    setHiyariForm((f) => ({ ...f, situation: v }))
+                  }
+                  rows={6}
+                  placeholder="例：送迎降車時に駐車場へ飛び出しそうになり、職員が声かけて制止した、など"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleAnalyzeHiyari()}
+                disabled={hiyariAiLoading || !hiyariForm.situation.trim()}
+                style={{
+                  ...s.btn,
+                  marginBottom: 0,
+                  opacity:
+                    hiyariAiLoading || !hiyariForm.situation.trim() ? 0.65 : 1,
+                  cursor:
+                    hiyariAiLoading || !hiyariForm.situation.trim()
+                      ? "wait"
+                      : "pointer",
+                }}
+              >
+                {hiyariAiLoading ? "分析中…" : "AIで分析する"}
+              </button>
             </div>
+
+            {hiyariAnalysis.trim() ? (
+              <div style={{ ...s.card, marginTop: 12 }}>
+                <label style={s.label}>分析結果（編集可）</label>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "#7a8a7a",
+                    margin: "0 0 8px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  要因分析・推奨対応・再発防止策を確認・修正してから保存してください。
+                </p>
+                <textarea
+                  value={hiyariAnalysis}
+                  onChange={(e) => setHiyariAnalysis(e.target.value)}
+                  rows={14}
+                  style={s.textarea}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveHiyari()}
+                  disabled={hiyariSaveBusy}
+                  style={{
+                    ...s.btnGold,
+                    marginTop: 12,
+                    opacity: hiyariSaveBusy ? 0.65 : 1,
+                    cursor: hiyariSaveBusy ? "wait" : "pointer",
+                  }}
+                >
+                  {hiyariSaveBusy ? "保存中…" : "この内容で保存"}
+                </button>
+              </div>
+            ) : null}
+
+            {hiyariHattoRecords.length > 0 ? (
+              <div style={{ ...s.card, marginTop: 12 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "#2a3a2a",
+                    marginBottom: 10,
+                  }}
+                >
+                  保存済みの記録
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {hiyariHattoRecords.slice(0, 8).map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        border: "1px solid #e0eae0",
+                        borderRadius: 12,
+                        padding: "12px 12px",
+                        background: "#fafcfa",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: "#2a3a2a",
+                          marginBottom: 4,
+                        }}
+                      >
+                        {formatJaDateTime(r.occurredAt)}
+                        {r.childName ? ` · ${r.childName}` : ""}
+                      </div>
+                      {r.location ? (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#7a8a7a",
+                            marginBottom: 4,
+                          }}
+                        >
+                          場所：{r.location}
+                        </div>
+                      ) : null}
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#2a3a2a",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {String(r.situation).slice(0, 80)}
+                        {r.situation.length > 80 ? "…" : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
-        {screen === "list" && (
+{screen === "list" && (
           <div>
             <div style={{ marginBottom: 16 }}>
               <div
