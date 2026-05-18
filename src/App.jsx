@@ -59,6 +59,18 @@ const AGE_OPTIONS = ["1歳", "2歳", "3歳", "4歳", "5歳", "6歳"];
 const LEVELS = ["低", "中", "高"];
 const SEVERITY = ["軽度", "中度", "重度"];
 
+/** ダッシュボードでタップ可能な画面（available と併用） */
+const HOME_MENU_ENABLED_SCREENS = new Set([
+  "list",
+  "hiyari",
+  "accident",
+  "familySupport",
+]);
+
+function isHomeMenuItemEnabled(item) {
+  return Boolean(item.screen && HOME_MENU_ENABLED_SCREENS.has(item.screen));
+}
+
 /** ログイン後トップ：機能選択ダッシュボード */
 const HOME_MENU_ITEMS = [
   {
@@ -2919,7 +2931,8 @@ export default function App() {
               }}
             >
               {HOME_MENU_ITEMS.map((item) => {
-                const comingSoon = !item.available;
+                const enabled = isHomeMenuItemEnabled(item);
+                const comingSoon = !enabled;
                 const cardInner = (
                   <>
                     {comingSoon ? (
@@ -2986,7 +2999,7 @@ export default function App() {
                     key={item.id}
                     type="button"
                     onClick={() => {
-                      if (item.screen) setScreen(item.screen);
+                      if (enabled && item.screen) setScreen(item.screen);
                     }}
                     style={{
                       ...s.card,
