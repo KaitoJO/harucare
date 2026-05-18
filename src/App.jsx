@@ -3,8 +3,25 @@ import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { exportSupportPlanPdf, supportPlanFormalPdfFilename } from "./exportSupportPlanPdf.js";
+import { mountAndExportAccidentReportPdf } from "./exportAccidentReportPdf.jsx";
 import { getSupabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
 import * as workspaceDb from "./lib/workspaceDb.js";
+import {
+  loadWorkspaceSettings,
+  saveWorkspaceSettings,
+} from "./lib/workspaceSettings.js";
+import {
+  accidentFormFromRecord,
+  buildAccidentOccurredIso,
+  buildAccidentPayload,
+  createDefaultAccidentForm,
+  hasMajorAccidentFlag,
+  loadAccidentFieldConfig,
+  parseAccidentAiSections,
+  resolveAccidentChildName,
+  saveAccidentFieldConfig,
+} from "./accidentReportConfig.js";
+import AccidentReportScreen from "./AccidentReportScreen.jsx";
 import AuthScreen from "./AuthScreen.jsx";
 import { buildFormalPlanDocument } from "./supportPlanMapper.js";
 import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
@@ -53,9 +70,10 @@ const HOME_MENU_ITEMS = [
   {
     id: "accident",
     title: "事故報告書",
-    description: "事故・インシデントの報告",
+    description: "事故報告・AI分析・PDF出力",
     icon: "📝",
-    available: false,
+    available: true,
+    screen: "accident",
   },
   {
     id: "family-support",
@@ -1231,6 +1249,67 @@ async function requestHiyariAnalysisFromClaude(form, childLabel) {
   });
 }
 
+const ACCIDENT_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの事故報告・安全管理の専門家です。
+施設スタッフが記録した事故について、東京都の放課後等デイサービス向け事故報告の観点で、事故原因の分析・再発防止策・管理者へのコメントを日本語で出力してください。
+
+出力形式（必ずこの見出し順・Markdown）：
+## 事故原因の分析
+## 再発防止策
+## 管理者へのコメント
+
+・事実に基づき、現場で実行可能な具体性で書くこと。
+・責めるトーンは避け、安全文化・体制改善に焦点を当てること。
+・前置き・謝罪・締めの定型文は不要。本文のみ。`;
+
+function buildAccidentAnalysisUserPrompt(form, childLabel) {
+  const types = (form.accidentTypes ?? [])
+    .map((id) => {
+      const labels = {
+        fall: "転倒・転落",
+        ingestion: "誤飲・誤食・誤薬",
+        elopement: "飛び出し・無断外出",
+        peer_trouble: "他児とのトラブル",
+        transport: "送迎中の事故",
+        other: "その他",
+      };
+      return labels[id] ?? id;
+    })
+    .join("、");
+
+  return `【事故報告書】
+事業所：${String(form.facilityName ?? "").trim() || "（未入力）"}
+報告日：${form.reportDate}
+作成者：${String(form.authorName ?? "").trim() || "（未入力）"}
+発生日時：${form.occurredDate} ${form.occurredTime}
+発生場所：${String(form.location ?? "").trim() || "（未入力）"}
+対象児童：${childLabel}
+事故種別：${types || "（未選択）"}
+重大フラグ：${[form.majorDeath && "死亡", form.majorFracture && "骨折", form.majorAbuse && "虐待"].filter(Boolean).join("、") || "なし"}
+
+【発生状況】
+${String(form.situation ?? "").trim() || "（未入力）"}
+
+【発見】
+発見者：${String(form.discovererName ?? "").trim() || "（未入力）"}
+発見時の状況：${String(form.discoverySituation ?? "").trim() || "（未入力）"}
+
+【対応】
+初期対応：${String(form.initialResponse ?? "").trim() || "（未入力）"}
+保護者連絡：${form.parentContactDate || "—"} ${form.parentContactTime || ""}
+医療機関受診：${form.medicalVisit === "yes" ? "あり" : "なし"}
+${form.medicalVisit === "yes" ? `医療機関：${form.medicalFacilityName}\n診断：${form.diagnosisResult}` : ""}
+
+上記に基づき、事故原因の分析・再発防止策・管理者へのコメントを出力してください。`;
+}
+
+async function requestAccidentAnalysisFromClaude(form, childLabel) {
+  return requestClaudeCompletion({
+    system: ACCIDENT_AI_SYSTEM,
+    userContent: buildAccidentAnalysisUserPrompt(form, childLabel),
+    max_tokens: 4096,
+  });
+}
+
 export default function App() {
   const supabase = useMemo(() => getSupabase(), []);
   const [session, setSession] = useState(null);
@@ -1302,6 +1381,23 @@ export default function App() {
   const [hiyariAiLoading, setHiyariAiLoading] = useState(false);
   const [hiyariHattoRecords, setHiyariHattoRecords] = useState([]);
   const [hiyariSaveBusy, setHiyariSaveBusy] = useState(false);
+  const [accidentFieldConfig, setAccidentFieldConfig] = useState(() =>
+    loadAccidentFieldConfig(),
+  );
+  const [accidentForm, setAccidentForm] = useState(() =>
+    createDefaultAccidentForm(loadWorkspaceSettings()),
+  );
+  const [accidentAiLoading, setAccidentAiLoading] = useState(false);
+  const [accidentSaveBusy, setAccidentSaveBusy] = useState(false);
+  const [accidentPdfBusy, setAccidentPdfBusy] = useState(false);
+  const [accidentReports, setAccidentReports] = useState([]);
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+  const [facilityNameInput, setFacilityNameInput] = useState(
+    () => loadWorkspaceSettings().facilityName,
+  );
+  const [defaultAuthorInput, setDefaultAuthorInput] = useState(
+    () => loadWorkspaceSettings().defaultAuthorName,
+  );
   const [listSearch, setListSearch] = useState("");
   const [listFilter, setListFilter] = useState("all");
   /** 支援計画生成時に API へ渡す追加プロンプト（詳細画面） */
@@ -1356,6 +1452,8 @@ export default function App() {
         setHiyariHattoRecords([]);
         setHiyariForm(createDefaultHiyariForm());
         setHiyariAnalysis("");
+        setAccidentReports([]);
+        setAccidentForm(createDefaultAccidentForm(loadWorkspaceSettings()));
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
         setSelectedHistoryEntry(null);
@@ -1408,6 +1506,7 @@ export default function App() {
           setSavedParentContacts(w.savedParentContacts);
           setPlanFeedbacks(w.planFeedbacks);
           setHiyariHattoRecords(w.hiyariHattoRecords ?? []);
+          setAccidentReports(w.accidentReports ?? []);
         })
         .catch((e) => {
           if (!cancelled) {
@@ -2013,6 +2112,136 @@ export default function App() {
     }
   };
 
+  const handleToggleAccidentField = (fieldId) => {
+    setAccidentFieldConfig((prev) => {
+      const next = prev.map((f) =>
+        f.id === fieldId ? { ...f, enabled: !f.enabled } : f,
+      );
+      saveAccidentFieldConfig(next);
+      return next;
+    });
+  };
+
+  const handleSaveWorkspaceSettings = () => {
+    const next = saveWorkspaceSettings({
+      facilityName: facilityNameInput.trim(),
+      defaultAuthorName: defaultAuthorInput.trim(),
+    });
+    setAccidentForm((f) => ({
+      ...f,
+      facilityName: next.facilityName,
+      authorName: f.authorName.trim() ? f.authorName : next.defaultAuthorName,
+    }));
+    showSaveToast();
+  };
+
+  const handleAnalyzeAccident = async () => {
+    if (!accidentForm.situation.trim()) {
+      setError("発生状況を入力してください。");
+      return;
+    }
+    setError(null);
+    setAccidentAiLoading(true);
+    try {
+      const childLabel = resolveAccidentChildName(accidentForm, children);
+      const text = await requestAccidentAnalysisFromClaude(
+        accidentForm,
+        childLabel,
+      );
+      const sections = parseAccidentAiSections(text);
+      setAccidentForm((f) => ({
+        ...f,
+        causeAnalysis: sections.causeAnalysis,
+        preventionMeasures: sections.preventionMeasures,
+        managerComment: sections.managerComment,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAccidentAiLoading(false);
+    }
+  };
+
+  const handleSaveAccident = async () => {
+    if (!accidentForm.situation.trim()) {
+      setError("発生状況を入力してください。");
+      return;
+    }
+    if (
+      !accidentForm.causeAnalysis.trim() ||
+      !accidentForm.preventionMeasures.trim() ||
+      !accidentForm.managerComment.trim()
+    ) {
+      setError(
+        "「AIで分析・防止策・コメントを生成」を実行し、内容を確認してから保存してください。",
+      );
+      return;
+    }
+    if (!accidentForm.childId) {
+      setError("対象児童を選択してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+
+    const childLabel = resolveAccidentChildName(accidentForm, children);
+    const occurredAt = buildAccidentOccurredIso(
+      accidentForm.occurredDate,
+      accidentForm.occurredTime,
+    );
+    const createdAt = new Date().toISOString();
+    const payload = buildAccidentPayload(accidentForm);
+
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childId: accidentForm.childId,
+      childName: childLabel,
+      occurredAt,
+      reportDate: accidentForm.reportDate,
+      facilityName: accidentForm.facilityName.trim(),
+      authorName: accidentForm.authorName.trim(),
+      location: accidentForm.location.trim(),
+      payload,
+      majorDeath: Boolean(accidentForm.majorDeath),
+      majorFracture: Boolean(accidentForm.majorFracture),
+      majorAbuse: Boolean(accidentForm.majorAbuse),
+      aiCauseAnalysis: accidentForm.causeAnalysis.trim(),
+      aiPrevention: accidentForm.preventionMeasures.trim(),
+      aiManagerComment: accidentForm.managerComment.trim(),
+      createdAt,
+    };
+
+    setAccidentSaveBusy(true);
+    try {
+      await workspaceDb.insertAccidentReport(supabase, session.user.id, entry);
+      setAccidentReports((prev) => [entry, ...prev]);
+      setAccidentForm(createDefaultAccidentForm(loadWorkspaceSettings()));
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAccidentSaveBusy(false);
+    }
+  };
+
+  const handleExportAccidentPdf = async (record) => {
+    setAccidentPdfBusy(true);
+    try {
+      await mountAndExportAccidentReportPdf({
+        record,
+        formatJaDateTime,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAccidentPdfBusy(false);
+    }
+  };
+
+  const handleOpenAccidentRecord = (record) => {
+    setAccidentForm(accidentFormFromRecord(record));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleExportProgramPdf = useCallback(async () => {
     if (!selectedChild || !generatedProgram.trim() || !generatedMappedPlan) return;
     setPdfBusy(true);
@@ -2071,7 +2300,7 @@ export default function App() {
   const goBack = () => {
     if (loading) return;
     setError(null);
-    if (screen === "list" || screen === "hiyari") {
+    if (screen === "list" || screen === "hiyari" || screen === "accident") {
       setScreen("home");
       return;
     }
@@ -2851,7 +3080,44 @@ export default function App() {
             ) : null}
           </div>
         )}
-{screen === "list" && (
+        {screen === "accident" && (
+          <AccidentReportScreen
+            s={s}
+            fieldConfig={accidentFieldConfig}
+            onToggleAccidentField={handleToggleAccidentField}
+            accidentForm={accidentForm}
+            setAccidentForm={setAccidentForm}
+            workspaceSettingsOpen={workspaceSettingsOpen}
+            setWorkspaceSettingsOpen={setWorkspaceSettingsOpen}
+            facilityNameInput={facilityNameInput}
+            setFacilityNameInput={setFacilityNameInput}
+            defaultAuthorInput={defaultAuthorInput}
+            setDefaultAuthorInput={setDefaultAuthorInput}
+            onSaveWorkspaceSettings={handleSaveWorkspaceSettings}
+            childrenList={children}
+            VoiceTextarea={VoiceAppendTextarea}
+            hasMajor={hasMajorAccidentFlag(accidentForm)}
+            accidentAiLoading={accidentAiLoading}
+            onAnalyze={() => void handleAnalyzeAccident()}
+            accidentSaveBusy={accidentSaveBusy}
+            onSave={() => void handleSaveAccident()}
+            accidentPdfBusy={accidentPdfBusy}
+            onExportPdf={(r) => void handleExportAccidentPdf(r)}
+            canSave={
+              Boolean(
+                accidentForm.situation.trim() &&
+                  accidentForm.causeAnalysis.trim() &&
+                  accidentForm.preventionMeasures.trim() &&
+                  accidentForm.managerComment.trim() &&
+                  accidentForm.childId,
+              )
+            }
+            accidentRecords={accidentReports}
+            formatJaDateTime={formatJaDateTime}
+            onOpenRecord={handleOpenAccidentRecord}
+          />
+        )}
+        {screen === "list" && (
           <div>
             <div style={{ marginBottom: 16 }}>
               <div

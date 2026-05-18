@@ -118,6 +118,30 @@ function hiyariHattoFromRow(r) {
   };
 }
 
+function accidentReportFromRow(r) {
+  const reportDate = r.report_date
+    ? String(r.report_date).slice(0, 10)
+    : "";
+  return {
+    id: r.id,
+    childId: r.child_id ?? null,
+    childName: r.child_name ?? "",
+    occurredAt: r.occurred_at,
+    reportDate,
+    facilityName: r.facility_name ?? "",
+    authorName: r.author_name ?? "",
+    location: r.location ?? "",
+    payload: r.payload ?? {},
+    majorDeath: Boolean(r.major_death),
+    majorFracture: Boolean(r.major_fracture),
+    majorAbuse: Boolean(r.major_abuse),
+    aiCauseAnalysis: r.ai_cause_analysis ?? "",
+    aiPrevention: r.ai_prevention ?? "",
+    aiManagerComment: r.ai_manager_comment ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {string} userId
@@ -131,6 +155,7 @@ export async function fetchWorkspace(supabase, userId) {
     { data: pcRows, error: e5 },
     { data: pfRows, error: e6 },
     { data: hhRows, error: e7 },
+    { data: arRows, error: e8 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -147,8 +172,13 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("occurred_at", { ascending: false }),
+    supabase
+      .from("accident_reports")
+      .select("*")
+      .eq("user_id", userId)
+      .order("occurred_at", { ascending: false }),
   ]);
-  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7;
+  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -158,6 +188,7 @@ export async function fetchWorkspace(supabase, userId) {
     savedParentContacts: (pcRows ?? []).map(contactFromRow),
     planFeedbacks: (pfRows ?? []).map(planFeedbackFromRow),
     hiyariHattoRecords: (hhRows ?? []).map(hiyariHattoFromRow),
+    accidentReports: (arRows ?? []).map(accidentReportFromRow),
   };
 }
 
@@ -340,6 +371,29 @@ export async function insertHiyariHattoRecord(supabase, userId, entry) {
     location: entry.location ?? "",
     situation: entry.situation ?? "",
     analysis_text: entry.analysisText ?? "",
+    created_at: entry.createdAt,
+  });
+  if (error) throw error;
+}
+
+export async function insertAccidentReport(supabase, userId, entry) {
+  const { error } = await supabase.from("accident_reports").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName ?? "",
+    occurred_at: entry.occurredAt,
+    report_date: entry.reportDate,
+    facility_name: entry.facilityName ?? "",
+    author_name: entry.authorName ?? "",
+    location: entry.location ?? "",
+    payload: entry.payload ?? {},
+    major_death: Boolean(entry.majorDeath),
+    major_fracture: Boolean(entry.majorFracture),
+    major_abuse: Boolean(entry.majorAbuse),
+    ai_cause_analysis: entry.aiCauseAnalysis ?? "",
+    ai_prevention: entry.aiPrevention ?? "",
+    ai_manager_comment: entry.aiManagerComment ?? "",
     created_at: entry.createdAt,
   });
   if (error) throw error;
