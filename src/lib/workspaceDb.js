@@ -142,6 +142,25 @@ function shiftEntryFromRow(r) {
   };
 }
 
+function therapyCaseExampleFromRow(r) {
+  return {
+    id: r.id,
+    childId: r.child_id ?? null,
+    childName: r.child_name ?? "",
+    childMode: r.child_mode ?? "select",
+    disability: r.disability ?? "",
+    age: r.age ?? "",
+    supportScene: r.support_scene ?? "",
+    challenges: r.challenges ?? "",
+    aiSummary: r.ai_summary ?? "",
+    aiEffectiveMethods: r.ai_effective_methods ?? "",
+    aiStaffAdvice: r.ai_staff_advice ?? "",
+    aiHandover: r.ai_handover ?? "",
+    authorName: r.author_name ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 function familySupportFromRow(r) {
   return {
     id: r.id,
@@ -200,6 +219,7 @@ export async function fetchWorkspace(supabase, userId) {
     { data: fsRows, error: e9 },
     { data: ssRows, error: e10 },
     { data: seRows, error: e11 },
+    { data: tcRows, error: e12 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -237,8 +257,14 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("shift_date", { ascending: true }),
+    supabase
+      .from("therapy_case_examples")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
   ]);
-  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11;
+  const err =
+    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -252,6 +278,7 @@ export async function fetchWorkspace(supabase, userId) {
     familySupportRecords: (fsRows ?? []).map(familySupportFromRow),
     shiftStaff: (ssRows ?? []).map(shiftStaffFromRow),
     shiftEntries: (seRows ?? []).map(shiftEntryFromRow),
+    therapyCaseExamples: (tcRows ?? []).map(therapyCaseExampleFromRow),
   };
 }
 
@@ -555,6 +582,27 @@ export async function deleteShiftEntry(supabase, userId, entryId) {
     .delete()
     .eq("id", entryId)
     .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function insertTherapyCaseExample(supabase, userId, entry) {
+  const { error } = await supabase.from("therapy_case_examples").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName ?? "",
+    child_mode: entry.childMode ?? "select",
+    disability: entry.disability ?? "",
+    age: entry.age ?? "",
+    support_scene: entry.supportScene ?? "",
+    challenges: entry.challenges ?? "",
+    ai_summary: entry.aiSummary ?? "",
+    ai_effective_methods: entry.aiEffectiveMethods ?? "",
+    ai_staff_advice: entry.aiStaffAdvice ?? "",
+    ai_handover: entry.aiHandover ?? "",
+    author_name: entry.authorName ?? "",
+    created_at: entry.createdAt,
+  });
   if (error) throw error;
 }
 

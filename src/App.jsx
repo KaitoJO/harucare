@@ -40,6 +40,14 @@ import {
 import AccidentReportScreen from "./AccidentReportScreen.jsx";
 import FamilySupportScreen from "./FamilySupportScreen.jsx";
 import ShiftScreen from "./ShiftScreen.jsx";
+import CaseExampleScreen from "./CaseExampleScreen.jsx";
+import {
+  caseExampleFormFromRecord,
+  createDefaultCaseExampleForm,
+  filterCaseExamples,
+  parseCaseAiSections,
+  resolveCaseChildLabel,
+} from "./caseExampleConfig.js";
 import {
   addMonths,
   aggregateShiftMonth,
@@ -75,6 +83,7 @@ const HOME_MENU_ENABLED_SCREENS = new Set([
   "accident",
   "familySupport",
   "shift",
+  "case",
 ]);
 
 function isHomeMenuItemEnabled(item) {
@@ -140,9 +149,10 @@ const HOME_MENU_ITEMS = [
   {
     id: "case",
     title: "療育の事例出し",
-    description: "事例の整理・参照",
+    description: "支援事例のAI整理・保存・職員共有",
     icon: "💡",
-    available: false,
+    available: true,
+    screen: "case",
   },
 ];
 
@@ -1386,6 +1396,42 @@ async function requestFamilySupportAiFromClaude(form, childLabel) {
   });
 }
 
+const CASE_EXAMPLE_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスで10年以上の経験を持つ療育支援の専門家です。
+職員が記録した支援場面と課題から、他職員が参照できる療育事例を日本語で作成してください。
+
+出力形式（必ずこの見出し順・Markdown）：
+## 支援事例のまとめ
+## 有効だった支援方法
+## 他職員へのアドバイス
+## 次回への引き継ぎ事項
+
+・観察事実と支援の工夫を具体的に。一般論だけにしないこと。
+・児童の尊厳に配慮し、ラベル貼りや断定的な診断表現は避けること。
+・前置き・謝罪・締めの定型文は不要。本文のみ。`;
+
+function buildCaseExampleAiUserPrompt(form, childLabel) {
+  return `【療育事例 入力】
+対象児童：${childLabel}
+障害種別：${String(form.disability ?? "").trim() || "（未入力）"}
+年齢：${String(form.age ?? "").trim() || "（未入力）"}
+
+【支援場面】
+${String(form.supportScene ?? "").trim() || "（未入力）"}
+
+【課題・困りごと】
+${String(form.challenges ?? "").trim() || "（未入力）"}
+
+上記に基づき、4つの見出しで療育事例を出力してください。`;
+}
+
+async function requestCaseExampleAiFromClaude(form, childLabel) {
+  return requestClaudeCompletion({
+    system: CASE_EXAMPLE_AI_SYSTEM,
+    userContent: buildCaseExampleAiUserPrompt(form, childLabel),
+    max_tokens: 4096,
+  });
+}
+
 export default function App() {
   const supabase = useMemo(() => getSupabase(), []);
   const [session, setSession] = useState(null);
@@ -1489,6 +1535,14 @@ export default function App() {
   const [editingShiftStaffId, setEditingShiftStaffId] = useState(null);
   const [shiftStaffPanelOpen, setShiftStaffPanelOpen] = useState(false);
   const [shiftSaveBusy, setShiftSaveBusy] = useState(false);
+  const [therapyCaseExamples, setTherapyCaseExamples] = useState([]);
+  const [caseExampleForm, setCaseExampleForm] = useState(
+    createDefaultCaseExampleForm,
+  );
+  const [caseExampleAiLoading, setCaseExampleAiLoading] = useState(false);
+  const [caseExampleSaveBusy, setCaseExampleSaveBusy] = useState(false);
+  const [caseFilterDisability, setCaseFilterDisability] = useState("all");
+  const [caseFilterSceneQuery, setCaseFilterSceneQuery] = useState("");
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [facilityNameInput, setFacilityNameInput] = useState(
     () => loadWorkspaceSettings().facilityName,
@@ -1560,6 +1614,10 @@ export default function App() {
         setShiftSelectedDate(null);
         setShiftEntryForm(createDefaultShiftEntryForm());
         setEditingShiftEntryId(null);
+        setTherapyCaseExamples([]);
+        setCaseExampleForm(createDefaultCaseExampleForm());
+        setCaseFilterDisability("all");
+        setCaseFilterSceneQuery("");
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
         setSelectedHistoryEntry(null);
@@ -1616,6 +1674,7 @@ export default function App() {
           setFamilySupportRecords(w.familySupportRecords ?? []);
           setShiftStaff(w.shiftStaff ?? []);
           setShiftEntries(w.shiftEntries ?? []);
+          setTherapyCaseExamples(w.therapyCaseExamples ?? []);
         })
         .catch((e) => {
           if (!cancelled) {
@@ -2507,6 +2566,127 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const filteredCaseExamples = useMemo(
+    () =>
+      filterCaseExamples(therapyCaseExamples, {
+        disability: caseFilterDisability,
+        sceneQuery: caseFilterSceneQuery,
+      }),
+    [therapyCaseExamples, caseFilterDisability, caseFilterSceneQuery],
+  );
+
+  const caseExampleCanSave = useMemo(() => {
+    const childOk =
+      caseExampleForm.childMode === "custom"
+        ? String(caseExampleForm.childNameCustom ?? "").trim()
+        : caseExampleForm.childId;
+    return Boolean(
+      childOk &&
+        caseExampleForm.aiSummary.trim() &&
+        caseExampleForm.aiEffectiveMethods.trim() &&
+        caseExampleForm.aiStaffAdvice.trim() &&
+        caseExampleForm.aiHandover.trim(),
+    );
+  }, [caseExampleForm]);
+
+  const handleAnalyzeCaseExample = async () => {
+    if (
+      !caseExampleForm.supportScene.trim() &&
+      !caseExampleForm.challenges.trim()
+    ) {
+      setError("支援場面または課題・困りごとを入力してください。");
+      return;
+    }
+    setError(null);
+    setCaseExampleAiLoading(true);
+    try {
+      const childLabel = resolveCaseChildLabel(caseExampleForm, children);
+      const text = await requestCaseExampleAiFromClaude(
+        caseExampleForm,
+        childLabel,
+      );
+      const sections = parseCaseAiSections(text);
+      setCaseExampleForm((f) => ({ ...f, ...sections }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCaseExampleAiLoading(false);
+    }
+  };
+
+  const handleSaveCaseExample = async () => {
+    if (
+      caseExampleForm.childMode === "select" &&
+      !caseExampleForm.childId
+    ) {
+      setError("対象児童を選択するか、直接入力に切り替えてください。");
+      return;
+    }
+    if (
+      caseExampleForm.childMode === "custom" &&
+      !caseExampleForm.childNameCustom.trim()
+    ) {
+      setError("児童名を入力してください。");
+      return;
+    }
+    if (!caseExampleCanSave) {
+      setError(
+        "「AIで事例を生成」を実行し、4項目を確認してから保存してください。",
+      );
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+
+    const childLabel = resolveCaseChildLabel(caseExampleForm, children);
+    const childId =
+      caseExampleForm.childMode === "select" && caseExampleForm.childId
+        ? caseExampleForm.childId
+        : null;
+    const createdAt = new Date().toISOString();
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childId,
+      childName: childLabel,
+      childMode: caseExampleForm.childMode,
+      disability: caseExampleForm.disability,
+      age: caseExampleForm.age,
+      supportScene: caseExampleForm.supportScene.trim(),
+      challenges: caseExampleForm.challenges.trim(),
+      aiSummary: caseExampleForm.aiSummary.trim(),
+      aiEffectiveMethods: caseExampleForm.aiEffectiveMethods.trim(),
+      aiStaffAdvice: caseExampleForm.aiStaffAdvice.trim(),
+      aiHandover: caseExampleForm.aiHandover.trim(),
+      authorName: defaultAuthorInput.trim(),
+      createdAt,
+    };
+
+    setCaseExampleSaveBusy(true);
+    try {
+      await workspaceDb.insertTherapyCaseExample(
+        supabase,
+        session.user.id,
+        entry,
+      );
+      setTherapyCaseExamples((prev) => [entry, ...prev]);
+      setCaseExampleForm(createDefaultCaseExampleForm());
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCaseExampleSaveBusy(false);
+    }
+  };
+
+  const handleOpenCaseExampleRecord = (record) => {
+    setCaseExampleForm(caseExampleFormFromRecord(record));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleNewCaseExample = () => {
+    setCaseExampleForm(createDefaultCaseExampleForm());
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const shiftMonthSummary = useMemo(
     () => aggregateShiftMonth(shiftEntries, shiftStaff, shiftYearMonth),
     [shiftEntries, shiftStaff, shiftYearMonth],
@@ -2745,7 +2925,8 @@ export default function App() {
       screen === "hiyari" ||
       screen === "accident" ||
       screen === "familySupport" ||
-      screen === "shift"
+      screen === "shift" ||
+      screen === "case"
     ) {
       setScreen("home");
       return;
@@ -3007,7 +3188,9 @@ export default function App() {
                     ? "家族支援加算"
                     : screen === "shift"
                       ? "シフト作成"
-                      : "個別発達支援プログラム管理"}
+                      : screen === "case"
+                        ? "療育の事例出し"
+                        : "個別発達支援プログラム管理"}
           </div>
         </div>
         <div
@@ -3603,6 +3786,31 @@ export default function App() {
             recordsByMonth={familySupportRecordsByMonth}
             formatJaDateTime={formatJaDateTime}
             onOpenRecord={handleOpenFamilySupportRecord}
+          />
+        )}
+        {screen === "case" && (
+          <CaseExampleScreen
+            s={s}
+            form={caseExampleForm}
+            setForm={setCaseExampleForm}
+            childrenList={children}
+            disabilityTypes={DISABILITY_TYPES}
+            ageOptions={AGE_OPTIONS}
+            VoiceTextarea={VoiceAppendTextarea}
+            caseAiLoading={caseExampleAiLoading}
+            onAnalyze={() => void handleAnalyzeCaseExample()}
+            saveBusy={caseExampleSaveBusy}
+            onSave={() => void handleSaveCaseExample()}
+            canSave={caseExampleCanSave}
+            filterDisability={caseFilterDisability}
+            setFilterDisability={setCaseFilterDisability}
+            filterSceneQuery={caseFilterSceneQuery}
+            setFilterSceneQuery={setCaseFilterSceneQuery}
+            filteredRecords={filteredCaseExamples}
+            totalCount={therapyCaseExamples.length}
+            formatJaDateTime={formatJaDateTime}
+            onOpenRecord={handleOpenCaseExampleRecord}
+            onNewRecord={handleNewCaseExample}
           />
         )}
         {screen === "shift" && (
