@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { exportSupportPlanPdf, supportPlanFormalPdfFilename } from "./exportSupportPlanPdf.js";
 import { mountAndExportAccidentReportPdf } from "./exportAccidentReportPdf.jsx";
+import { mountAndExportFamilySupportPdf } from "./exportFamilySupportPdf.jsx";
 import { getSupabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
 import * as workspaceDb from "./lib/workspaceDb.js";
 import {
@@ -21,7 +22,23 @@ import {
   resolveAccidentChildName,
   saveAccidentFieldConfig,
 } from "./accidentReportConfig.js";
+import {
+  buildConductedIso,
+  buildFamilySupportPayload,
+  countBillableInMonth,
+  createDefaultFamilySupportForm,
+  familySupportFormFromRecord,
+  groupRecordsByMonth,
+  calcDurationMinutes,
+  isBillableDuration,
+  parseFamilySupportAiSections,
+  remainingMonthlySlots,
+  resolveFamilySupportChildName,
+  supportTypeLabel,
+  yearMonthFromDateStr,
+} from "./familySupportConfig.js";
 import AccidentReportScreen from "./AccidentReportScreen.jsx";
+import FamilySupportScreen from "./FamilySupportScreen.jsx";
 import AuthScreen from "./AuthScreen.jsx";
 import { buildFormalPlanDocument } from "./supportPlanMapper.js";
 import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
@@ -78,9 +95,10 @@ const HOME_MENU_ITEMS = [
   {
     id: "family-support",
     title: "家族支援加算",
-    description: "家族支援の記録・加算要件の整理",
+    description: "実施記録・AI文書・月4回管理",
     icon: "👨‍👩‍👧",
-    available: false,
+    available: true,
+    screen: "familySupport",
   },
   {
     id: "parenting-support",
@@ -1310,6 +1328,41 @@ async function requestAccidentAnalysisFromClaude(form, childLabel) {
   });
 }
 
+const FAMILY_SUPPORT_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの家族支援加算に精通した専門家です。
+保護者への相談支援の記録から、加算申請・実地指導に耐える正式な記録文と次回提案を日本語で作成してください。
+
+出力形式（必ずこの見出し順・Markdown）：
+## 相談援助の記録
+## 次回の支援提案
+
+・事実に基づき、第三者が読んでも状況がわかる文体で書くこと。
+・加算要件（相談援助の内容・時間・関係性）が伝わるよう具体的に。
+・前置き・謝罪・締めの定型文は不要。本文のみ。`;
+
+function buildFamilySupportAiUserPrompt(form, childLabel) {
+  const duration = calcDurationMinutes(form.startTime, form.endTime);
+  return `【家族支援加算 実施記録】
+対象児童：${childLabel}
+実施日時：${form.conductedDate} ${form.conductedTime}
+担当者：${String(form.staffName ?? "").trim() || "（未入力）"}
+支援種別：${supportTypeLabel(form.supportType)}
+参加者：${String(form.participantName ?? "").trim() || "（未入力）"}（${String(form.participantRelation ?? "").trim() || "続柄未記入"}）
+実施時間：${form.startTime || "—"} 〜 ${form.endTime || "—"}（${duration != null ? `${duration}分` : "未入力"}）
+
+【相談内容】
+${String(form.consultationContent ?? "").trim() || "（未入力）"}
+
+上記に基づき、相談援助の記録（加算申請用の正式文）と次回の支援提案を出力してください。`;
+}
+
+async function requestFamilySupportAiFromClaude(form, childLabel) {
+  return requestClaudeCompletion({
+    system: FAMILY_SUPPORT_AI_SYSTEM,
+    userContent: buildFamilySupportAiUserPrompt(form, childLabel),
+    max_tokens: 4096,
+  });
+}
+
 export default function App() {
   const supabase = useMemo(() => getSupabase(), []);
   const [session, setSession] = useState(null);
@@ -1391,6 +1444,13 @@ export default function App() {
   const [accidentSaveBusy, setAccidentSaveBusy] = useState(false);
   const [accidentPdfBusy, setAccidentPdfBusy] = useState(false);
   const [accidentReports, setAccidentReports] = useState([]);
+  const [familySupportForm, setFamilySupportForm] = useState(
+    createDefaultFamilySupportForm,
+  );
+  const [familySupportRecords, setFamilySupportRecords] = useState([]);
+  const [familySupportAiLoading, setFamilySupportAiLoading] = useState(false);
+  const [familySupportSaveBusy, setFamilySupportSaveBusy] = useState(false);
+  const [familySupportPdfBusy, setFamilySupportPdfBusy] = useState(false);
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [facilityNameInput, setFacilityNameInput] = useState(
     () => loadWorkspaceSettings().facilityName,
@@ -1454,6 +1514,8 @@ export default function App() {
         setHiyariAnalysis("");
         setAccidentReports([]);
         setAccidentForm(createDefaultAccidentForm(loadWorkspaceSettings()));
+        setFamilySupportRecords([]);
+        setFamilySupportForm(createDefaultFamilySupportForm());
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
         setSelectedHistoryEntry(null);
@@ -1507,6 +1569,7 @@ export default function App() {
           setPlanFeedbacks(w.planFeedbacks);
           setHiyariHattoRecords(w.hiyariHattoRecords ?? []);
           setAccidentReports(w.accidentReports ?? []);
+          setFamilySupportRecords(w.familySupportRecords ?? []);
         })
         .catch((e) => {
           if (!cancelled) {
@@ -2242,6 +2305,162 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const familySupportDurationMinutes = useMemo(
+    () =>
+      calcDurationMinutes(
+        familySupportForm.startTime,
+        familySupportForm.endTime,
+      ),
+    [familySupportForm.startTime, familySupportForm.endTime],
+  );
+
+  const familySupportDurationWarning = useMemo(() => {
+    if (familySupportDurationMinutes == null) return false;
+    return !isBillableDuration(familySupportDurationMinutes);
+  }, [familySupportDurationMinutes]);
+
+  const familySupportMonthlyUsed = useMemo(() => {
+    if (!familySupportForm.childId) return 0;
+    const ym = yearMonthFromDateStr(familySupportForm.conductedDate);
+    return countBillableInMonth(
+      familySupportRecords,
+      familySupportForm.childId,
+      ym,
+    );
+  }, [
+    familySupportRecords,
+    familySupportForm.childId,
+    familySupportForm.conductedDate,
+  ]);
+
+  const familySupportMonthlyRemaining = useMemo(
+    () => remainingMonthlySlots(familySupportMonthlyUsed),
+    [familySupportMonthlyUsed],
+  );
+
+  const familySupportRecordsByMonth = useMemo(
+    () => groupRecordsByMonth(familySupportRecords),
+    [familySupportRecords],
+  );
+
+  const handleAnalyzeFamilySupport = async () => {
+    if (!familySupportForm.consultationContent.trim()) {
+      setError("相談内容を入力してください。");
+      return;
+    }
+    setError(null);
+    setFamilySupportAiLoading(true);
+    try {
+      const childLabel = resolveFamilySupportChildName(
+        familySupportForm,
+        children,
+      );
+      const text = await requestFamilySupportAiFromClaude(
+        familySupportForm,
+        childLabel,
+      );
+      const sections = parseFamilySupportAiSections(text);
+      setFamilySupportForm((f) => ({
+        ...f,
+        aiRecordText: sections.aiRecordText,
+        aiNextSuggestion: sections.aiNextSuggestion,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFamilySupportAiLoading(false);
+    }
+  };
+
+  const handleSaveFamilySupport = async () => {
+    if (!familySupportForm.childId) {
+      setError("対象児童を選択してください。");
+      return;
+    }
+    if (!familySupportForm.consultationContent.trim()) {
+      setError("相談内容を入力してください。");
+      return;
+    }
+    if (
+      !familySupportForm.aiRecordText.trim() ||
+      !familySupportForm.aiNextSuggestion.trim()
+    ) {
+      setError(
+        "「AIで記録文・次回提案を生成」を実行し、内容を確認してから保存してください。",
+      );
+      return;
+    }
+    if (!isBillableDuration(familySupportDurationMinutes)) {
+      setError(
+        "実施時間が30分未満のため加算算定不可です。時間を修正するか、記録のみ残す場合は30分以上にしてください。",
+      );
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+
+    const childLabel = resolveFamilySupportChildName(
+      familySupportForm,
+      children,
+    );
+    const conductedAt = buildConductedIso(
+      familySupportForm.conductedDate,
+      familySupportForm.conductedTime,
+    );
+    const payload = buildFamilySupportPayload(familySupportForm);
+    const durationMinutes = familySupportDurationMinutes ?? 0;
+    const createdAt = new Date().toISOString();
+
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childId: familySupportForm.childId,
+      childName: childLabel,
+      conductedAt,
+      staffName: familySupportForm.staffName.trim(),
+      supportType: familySupportForm.supportType,
+      durationMinutes,
+      billable: isBillableDuration(durationMinutes),
+      payload,
+      aiRecordText: familySupportForm.aiRecordText.trim(),
+      aiNextSuggestion: familySupportForm.aiNextSuggestion.trim(),
+      createdAt,
+    };
+
+    setFamilySupportSaveBusy(true);
+    try {
+      await workspaceDb.insertFamilySupportRecord(
+        supabase,
+        session.user.id,
+        entry,
+      );
+      setFamilySupportRecords((prev) => [entry, ...prev]);
+      setFamilySupportForm(createDefaultFamilySupportForm());
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFamilySupportSaveBusy(false);
+    }
+  };
+
+  const handleExportFamilySupportPdf = async (record) => {
+    setFamilySupportPdfBusy(true);
+    try {
+      await mountAndExportFamilySupportPdf({
+        record,
+        formatJaDateTime,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFamilySupportPdfBusy(false);
+    }
+  };
+
+  const handleOpenFamilySupportRecord = (record) => {
+    setFamilySupportForm(familySupportFormFromRecord(record));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleExportProgramPdf = useCallback(async () => {
     if (!selectedChild || !generatedProgram.trim() || !generatedMappedPlan) return;
     setPdfBusy(true);
@@ -2300,7 +2519,12 @@ export default function App() {
   const goBack = () => {
     if (loading) return;
     setError(null);
-    if (screen === "list" || screen === "hiyari" || screen === "accident") {
+    if (
+      screen === "list" ||
+      screen === "hiyari" ||
+      screen === "accident" ||
+      screen === "familySupport"
+    ) {
       setScreen("home");
       return;
     }
@@ -2557,7 +2781,9 @@ export default function App() {
                 ? "ヒヤリハット"
                 : screen === "accident"
                   ? "事故報告書"
-                  : "個別発達支援プログラム管理"}
+                  : screen === "familySupport"
+                    ? "家族支援加算"
+                    : "個別発達支援プログラム管理"}
           </div>
         </div>
         <div
@@ -3121,6 +3347,37 @@ export default function App() {
             accidentRecords={accidentReports}
             formatJaDateTime={formatJaDateTime}
             onOpenRecord={handleOpenAccidentRecord}
+          />
+        )}
+        {screen === "familySupport" && (
+          <FamilySupportScreen
+            s={s}
+            form={familySupportForm}
+            setForm={setFamilySupportForm}
+            childrenList={children}
+            VoiceTextarea={VoiceAppendTextarea}
+            durationMinutes={familySupportDurationMinutes}
+            durationWarning={familySupportDurationWarning}
+            monthlyUsed={familySupportMonthlyUsed}
+            monthlyRemaining={familySupportMonthlyRemaining}
+            familyAiLoading={familySupportAiLoading}
+            onAnalyze={() => void handleAnalyzeFamilySupport()}
+            saveBusy={familySupportSaveBusy}
+            onSave={() => void handleSaveFamilySupport()}
+            canSave={
+              Boolean(
+                familySupportForm.childId &&
+                  familySupportForm.consultationContent.trim() &&
+                  familySupportForm.aiRecordText.trim() &&
+                  familySupportForm.aiNextSuggestion.trim() &&
+                  isBillableDuration(familySupportDurationMinutes),
+              )
+            }
+            pdfBusy={familySupportPdfBusy}
+            onExportPdf={(r) => void handleExportFamilySupportPdf(r)}
+            recordsByMonth={familySupportRecordsByMonth}
+            formatJaDateTime={formatJaDateTime}
+            onOpenRecord={handleOpenFamilySupportRecord}
           />
         )}
         {screen === "list" && (

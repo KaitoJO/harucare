@@ -118,6 +118,23 @@ function hiyariHattoFromRow(r) {
   };
 }
 
+function familySupportFromRow(r) {
+  return {
+    id: r.id,
+    childId: r.child_id ?? null,
+    childName: r.child_name ?? "",
+    conductedAt: r.conducted_at,
+    staffName: r.staff_name ?? "",
+    supportType: r.support_type ?? "home_visit",
+    durationMinutes: r.duration_minutes ?? 0,
+    billable: Boolean(r.billable),
+    payload: r.payload ?? {},
+    aiRecordText: r.ai_record_text ?? "",
+    aiNextSuggestion: r.ai_next_suggestion ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 function accidentReportFromRow(r) {
   const reportDate = r.report_date
     ? String(r.report_date).slice(0, 10)
@@ -156,6 +173,7 @@ export async function fetchWorkspace(supabase, userId) {
     { data: pfRows, error: e6 },
     { data: hhRows, error: e7 },
     { data: arRows, error: e8 },
+    { data: fsRows, error: e9 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -177,8 +195,13 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("occurred_at", { ascending: false }),
+    supabase
+      .from("family_support_records")
+      .select("*")
+      .eq("user_id", userId)
+      .order("conducted_at", { ascending: false }),
   ]);
-  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8;
+  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -189,6 +212,7 @@ export async function fetchWorkspace(supabase, userId) {
     planFeedbacks: (pfRows ?? []).map(planFeedbackFromRow),
     hiyariHattoRecords: (hhRows ?? []).map(hiyariHattoFromRow),
     accidentReports: (arRows ?? []).map(accidentReportFromRow),
+    familySupportRecords: (fsRows ?? []).map(familySupportFromRow),
   };
 }
 
@@ -371,6 +395,25 @@ export async function insertHiyariHattoRecord(supabase, userId, entry) {
     location: entry.location ?? "",
     situation: entry.situation ?? "",
     analysis_text: entry.analysisText ?? "",
+    created_at: entry.createdAt,
+  });
+  if (error) throw error;
+}
+
+export async function insertFamilySupportRecord(supabase, userId, entry) {
+  const { error } = await supabase.from("family_support_records").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName ?? "",
+    conducted_at: entry.conductedAt,
+    staff_name: entry.staffName ?? "",
+    support_type: entry.supportType ?? "home_visit",
+    duration_minutes: entry.durationMinutes ?? 0,
+    billable: Boolean(entry.billable),
+    payload: entry.payload ?? {},
+    ai_record_text: entry.aiRecordText ?? "",
+    ai_next_suggestion: entry.aiNextSuggestion ?? "",
     created_at: entry.createdAt,
   });
   if (error) throw error;
