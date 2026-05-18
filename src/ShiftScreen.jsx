@@ -1,5 +1,6 @@
 import {
   SHIFT_TYPE_OPTIONS,
+  STAFF_COLOR_PALETTE,
   WEEKDAY_LABELS,
   buildMonthCalendarCells,
   defaultTimesForShiftType,
@@ -485,14 +486,43 @@ export default function ShiftScreen(props) {
                 style={{ ...s.input, marginBottom: 8 }}
               />
               <label style={s.label}>表示色</label>
-              <input
-                type="color"
-                value={staffDraft.color}
-                onChange={(e) =>
-                  setStaffDraft((d) => ({ ...d, color: e.target.value }))
-                }
-                style={{ width: "100%", height: 36, marginBottom: 10, cursor: "pointer" }}
-              />
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  marginBottom: 12,
+                }}
+              >
+                {STAFF_COLOR_PALETTE.map((c) => {
+                  const selected = staffDraft.color === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      title={c}
+                      aria-label={`色 ${c}`}
+                      aria-pressed={selected}
+                      onClick={() => setStaffDraft((d) => ({ ...d, color: c }))}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: c,
+                        border: selected
+                          ? "3px solid #2a3a2a"
+                          : "2px solid #e0eae0",
+                        boxShadow: selected
+                          ? "0 0 0 2px #fff, 0 0 0 4px #2d5a3d"
+                          : "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
+                    />
+                  );
+                })}
+              </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" onClick={onSaveStaff} style={s.btn}>
                   {editingStaffId ? "更新" : "追加"}
