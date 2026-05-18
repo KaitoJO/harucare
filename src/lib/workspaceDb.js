@@ -118,6 +118,30 @@ function hiyariHattoFromRow(r) {
   };
 }
 
+function shiftStaffFromRow(r) {
+  return {
+    id: r.id,
+    name: r.name ?? "",
+    color: r.color ?? "#2d5a3d",
+    sortOrder: r.sort_order ?? 0,
+    createdAt: r.created_at,
+  };
+}
+
+function shiftEntryFromRow(r) {
+  const shiftDate = r.shift_date ? String(r.shift_date).slice(0, 10) : "";
+  return {
+    id: r.id,
+    staffId: r.staff_id,
+    shiftDate,
+    shiftType: r.shift_type ?? "work",
+    startTime: r.start_time ?? "",
+    endTime: r.end_time ?? "",
+    notes: r.notes ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 function familySupportFromRow(r) {
   return {
     id: r.id,
@@ -174,6 +198,8 @@ export async function fetchWorkspace(supabase, userId) {
     { data: hhRows, error: e7 },
     { data: arRows, error: e8 },
     { data: fsRows, error: e9 },
+    { data: ssRows, error: e10 },
+    { data: seRows, error: e11 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -200,8 +226,19 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("conducted_at", { ascending: false }),
+    supabase
+      .from("shift_staff")
+      .select("*")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("shift_entries")
+      .select("*")
+      .eq("user_id", userId)
+      .order("shift_date", { ascending: true }),
   ]);
-  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9;
+  const err = e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -213,6 +250,8 @@ export async function fetchWorkspace(supabase, userId) {
     hiyariHattoRecords: (hhRows ?? []).map(hiyariHattoFromRow),
     accidentReports: (arRows ?? []).map(accidentReportFromRow),
     familySupportRecords: (fsRows ?? []).map(familySupportFromRow),
+    shiftStaff: (ssRows ?? []).map(shiftStaffFromRow),
+    shiftEntries: (seRows ?? []).map(shiftEntryFromRow),
   };
 }
 
@@ -439,6 +478,83 @@ export async function insertAccidentReport(supabase, userId, entry) {
     ai_manager_comment: entry.aiManagerComment ?? "",
     created_at: entry.createdAt,
   });
+  if (error) throw error;
+}
+
+export async function insertShiftStaff(supabase, userId, staff) {
+  const { data, error } = await supabase
+    .from("shift_staff")
+    .insert({
+      user_id: userId,
+      name: staff.name.trim(),
+      color: staff.color ?? "#2d5a3d",
+      sort_order: staff.sortOrder ?? 0,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return shiftStaffFromRow(data);
+}
+
+export async function updateShiftStaff(supabase, userId, staffId, patch) {
+  const row = {};
+  if (patch.name != null) row.name = patch.name.trim();
+  if (patch.color != null) row.color = patch.color;
+  if (patch.sortOrder != null) row.sort_order = patch.sortOrder;
+  const { error } = await supabase
+    .from("shift_staff")
+    .update(row)
+    .eq("id", staffId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function deleteShiftStaff(supabase, userId, staffId) {
+  const { error } = await supabase
+    .from("shift_staff")
+    .delete()
+    .eq("id", staffId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function insertShiftEntry(supabase, userId, entry) {
+  const { error } = await supabase.from("shift_entries").insert({
+    id: entry.id,
+    user_id: userId,
+    staff_id: entry.staffId,
+    shift_date: entry.shiftDate,
+    shift_type: entry.shiftType ?? "work",
+    start_time: entry.startTime ?? "",
+    end_time: entry.endTime ?? "",
+    notes: entry.notes ?? "",
+    created_at: entry.createdAt,
+  });
+  if (error) throw error;
+}
+
+export async function updateShiftEntry(supabase, userId, entryId, patch) {
+  const row = {};
+  if (patch.staffId != null) row.staff_id = patch.staffId;
+  if (patch.shiftDate != null) row.shift_date = patch.shiftDate;
+  if (patch.shiftType != null) row.shift_type = patch.shiftType;
+  if (patch.startTime != null) row.start_time = patch.startTime;
+  if (patch.endTime != null) row.end_time = patch.endTime;
+  if (patch.notes != null) row.notes = patch.notes;
+  const { error } = await supabase
+    .from("shift_entries")
+    .update(row)
+    .eq("id", entryId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function deleteShiftEntry(supabase, userId, entryId) {
+  const { error } = await supabase
+    .from("shift_entries")
+    .delete()
+    .eq("id", entryId)
+    .eq("user_id", userId);
   if (error) throw error;
 }
 

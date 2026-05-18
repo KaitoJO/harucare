@@ -39,6 +39,15 @@ import {
 } from "./familySupportConfig.js";
 import AccidentReportScreen from "./AccidentReportScreen.jsx";
 import FamilySupportScreen from "./FamilySupportScreen.jsx";
+import ShiftScreen from "./ShiftScreen.jsx";
+import {
+  addMonths,
+  aggregateShiftMonth,
+  createDefaultShiftEntryForm,
+  currentYearMonth,
+  pickStaffColor,
+  shiftTypeHasTime,
+} from "./shiftConfig.js";
 import AuthScreen from "./AuthScreen.jsx";
 import { buildFormalPlanDocument } from "./supportPlanMapper.js";
 import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
@@ -65,6 +74,7 @@ const HOME_MENU_ENABLED_SCREENS = new Set([
   "hiyari",
   "accident",
   "familySupport",
+  "shift",
 ]);
 
 function isHomeMenuItemEnabled(item) {
@@ -122,9 +132,10 @@ const HOME_MENU_ITEMS = [
   {
     id: "shift",
     title: "シフト作成",
-    description: "職員シフトの作成・調整",
+    description: "カレンダー・職員管理・勤務集計",
     icon: "📅",
-    available: false,
+    available: true,
+    screen: "shift",
   },
   {
     id: "case",
@@ -1463,6 +1474,21 @@ export default function App() {
   const [familySupportAiLoading, setFamilySupportAiLoading] = useState(false);
   const [familySupportSaveBusy, setFamilySupportSaveBusy] = useState(false);
   const [familySupportPdfBusy, setFamilySupportPdfBusy] = useState(false);
+  const [shiftStaff, setShiftStaff] = useState([]);
+  const [shiftEntries, setShiftEntries] = useState([]);
+  const [shiftYearMonth, setShiftYearMonth] = useState(currentYearMonth);
+  const [shiftSelectedDate, setShiftSelectedDate] = useState(null);
+  const [shiftEntryForm, setShiftEntryForm] = useState(() =>
+    createDefaultShiftEntryForm(),
+  );
+  const [editingShiftEntryId, setEditingShiftEntryId] = useState(null);
+  const [shiftStaffDraft, setShiftStaffDraft] = useState({
+    name: "",
+    color: "#2d5a3d",
+  });
+  const [editingShiftStaffId, setEditingShiftStaffId] = useState(null);
+  const [shiftStaffPanelOpen, setShiftStaffPanelOpen] = useState(false);
+  const [shiftSaveBusy, setShiftSaveBusy] = useState(false);
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [facilityNameInput, setFacilityNameInput] = useState(
     () => loadWorkspaceSettings().facilityName,
@@ -1528,6 +1554,12 @@ export default function App() {
         setAccidentForm(createDefaultAccidentForm(loadWorkspaceSettings()));
         setFamilySupportRecords([]);
         setFamilySupportForm(createDefaultFamilySupportForm());
+        setShiftStaff([]);
+        setShiftEntries([]);
+        setShiftYearMonth(currentYearMonth());
+        setShiftSelectedDate(null);
+        setShiftEntryForm(createDefaultShiftEntryForm());
+        setEditingShiftEntryId(null);
         setSelectedSaved(null);
         setSelectedSavedChildName(null);
         setSelectedHistoryEntry(null);
@@ -1582,6 +1614,8 @@ export default function App() {
           setHiyariHattoRecords(w.hiyariHattoRecords ?? []);
           setAccidentReports(w.accidentReports ?? []);
           setFamilySupportRecords(w.familySupportRecords ?? []);
+          setShiftStaff(w.shiftStaff ?? []);
+          setShiftEntries(w.shiftEntries ?? []);
         })
         .catch((e) => {
           if (!cancelled) {
@@ -2473,6 +2507,181 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const shiftMonthSummary = useMemo(
+    () => aggregateShiftMonth(shiftEntries, shiftStaff, shiftYearMonth),
+    [shiftEntries, shiftStaff, shiftYearMonth],
+  );
+
+  const handleSelectShiftDate = (dateStr) => {
+    setShiftSelectedDate(dateStr);
+    setShiftEntryForm(createDefaultShiftEntryForm(dateStr));
+    setEditingShiftEntryId(null);
+  };
+
+  const handleEditShiftEntry = (entry) => {
+    setEditingShiftEntryId(entry.id);
+    setShiftEntryForm({
+      staffId: entry.staffId,
+      shiftDate: entry.shiftDate,
+      shiftType: entry.shiftType,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      notes: entry.notes ?? "",
+    });
+  };
+
+  const handleSaveShiftEntry = async () => {
+    if (!shiftEntryForm.staffId) {
+      setError("職員を選択してください。");
+      return;
+    }
+    if (!shiftSelectedDate && !shiftEntryForm.shiftDate) {
+      setError("日付を選択してください。");
+      return;
+    }
+    if (
+      shiftTypeHasTime(shiftEntryForm.shiftType) &&
+      (!shiftEntryForm.startTime || !shiftEntryForm.endTime)
+    ) {
+      setError("出勤・退勤時間を入力してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+
+    const shiftDate = shiftSelectedDate || shiftEntryForm.shiftDate;
+    setShiftSaveBusy(true);
+    try {
+      if (editingShiftEntryId) {
+        await workspaceDb.updateShiftEntry(
+          supabase,
+          session.user.id,
+          editingShiftEntryId,
+          {
+            staffId: shiftEntryForm.staffId,
+            shiftDate,
+            shiftType: shiftEntryForm.shiftType,
+            startTime: shiftEntryForm.startTime,
+            endTime: shiftEntryForm.endTime,
+            notes: shiftEntryForm.notes.trim(),
+          },
+        );
+        setShiftEntries((prev) =>
+          prev.map((e) =>
+            e.id === editingShiftEntryId
+              ? {
+                  ...e,
+                  staffId: shiftEntryForm.staffId,
+                  shiftDate,
+                  shiftType: shiftEntryForm.shiftType,
+                  startTime: shiftEntryForm.startTime,
+                  endTime: shiftEntryForm.endTime,
+                  notes: shiftEntryForm.notes.trim(),
+                }
+              : e,
+          ),
+        );
+      } else {
+        const createdAt = new Date().toISOString();
+        const entry = {
+          id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+          staffId: shiftEntryForm.staffId,
+          shiftDate,
+          shiftType: shiftEntryForm.shiftType,
+          startTime: shiftEntryForm.startTime,
+          endTime: shiftEntryForm.endTime,
+          notes: shiftEntryForm.notes.trim(),
+          createdAt,
+        };
+        await workspaceDb.insertShiftEntry(supabase, session.user.id, entry);
+        setShiftEntries((prev) => [...prev, entry]);
+      }
+      setShiftEntryForm(createDefaultShiftEntryForm(shiftDate));
+      setEditingShiftEntryId(null);
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setShiftSaveBusy(false);
+    }
+  };
+
+  const handleDeleteShiftEntry = async (entryId) => {
+    if (!supabase || !session?.user?.id) return;
+    if (!window.confirm("このシフトを削除しますか？")) return;
+    try {
+      await workspaceDb.deleteShiftEntry(supabase, session.user.id, entryId);
+      setShiftEntries((prev) => prev.filter((e) => e.id !== entryId));
+      if (editingShiftEntryId === entryId) {
+        setEditingShiftEntryId(null);
+        setShiftEntryForm(createDefaultShiftEntryForm(shiftSelectedDate ?? ""));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleSaveShiftStaff = async () => {
+    if (!shiftStaffDraft.name.trim()) {
+      setError("職員名を入力してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+    try {
+      if (editingShiftStaffId) {
+        await workspaceDb.updateShiftStaff(
+          supabase,
+          session.user.id,
+          editingShiftStaffId,
+          {
+            name: shiftStaffDraft.name,
+            color: shiftStaffDraft.color,
+          },
+        );
+        setShiftStaff((prev) =>
+          prev.map((st) =>
+            st.id === editingShiftStaffId
+              ? {
+                  ...st,
+                  name: shiftStaffDraft.name.trim(),
+                  color: shiftStaffDraft.color,
+                }
+              : st,
+          ),
+        );
+      } else {
+        const row = await workspaceDb.insertShiftStaff(supabase, session.user.id, {
+          name: shiftStaffDraft.name,
+          color: shiftStaffDraft.color || pickStaffColor(shiftStaff),
+          sortOrder: shiftStaff.length,
+        });
+        setShiftStaff((prev) => [...prev, row]);
+      }
+      setShiftStaffDraft({ name: "", color: pickStaffColor(shiftStaff) });
+      setEditingShiftStaffId(null);
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleDeleteShiftStaff = async (staffId) => {
+    if (!supabase || !session?.user?.id) return;
+    if (!window.confirm("この職員と紐づくシフトをすべて削除します。よろしいですか？")) {
+      return;
+    }
+    try {
+      await workspaceDb.deleteShiftStaff(supabase, session.user.id, staffId);
+      setShiftStaff((prev) => prev.filter((s) => s.id !== staffId));
+      setShiftEntries((prev) => prev.filter((e) => e.staffId !== staffId));
+      if (editingShiftStaffId === staffId) {
+        setEditingShiftStaffId(null);
+        setShiftStaffDraft({ name: "", color: pickStaffColor(shiftStaff) });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const handleExportProgramPdf = useCallback(async () => {
     if (!selectedChild || !generatedProgram.trim() || !generatedMappedPlan) return;
     setPdfBusy(true);
@@ -2535,7 +2744,8 @@ export default function App() {
       screen === "list" ||
       screen === "hiyari" ||
       screen === "accident" ||
-      screen === "familySupport"
+      screen === "familySupport" ||
+      screen === "shift"
     ) {
       setScreen("home");
       return;
@@ -2795,7 +3005,9 @@ export default function App() {
                   ? "事故報告書"
                   : screen === "familySupport"
                     ? "家族支援加算"
-                    : "個別発達支援プログラム管理"}
+                    : screen === "shift"
+                      ? "シフト作成"
+                      : "個別発達支援プログラム管理"}
           </div>
         </div>
         <div
@@ -3391,6 +3603,52 @@ export default function App() {
             recordsByMonth={familySupportRecordsByMonth}
             formatJaDateTime={formatJaDateTime}
             onOpenRecord={handleOpenFamilySupportRecord}
+          />
+        )}
+        {screen === "shift" && (
+          <ShiftScreen
+            s={s}
+            staff={shiftStaff}
+            entries={shiftEntries}
+            yearMonth={shiftYearMonth}
+            onPrevMonth={() => setShiftYearMonth((ym) => addMonths(ym, -1))}
+            onNextMonth={() => setShiftYearMonth((ym) => addMonths(ym, 1))}
+            selectedDate={shiftSelectedDate}
+            onSelectDate={handleSelectShiftDate}
+            entryForm={shiftEntryForm}
+            setEntryForm={setShiftEntryForm}
+            editingEntryId={editingShiftEntryId}
+            onClearEntryEdit={() => {
+              setEditingShiftEntryId(null);
+              setShiftEntryForm(createDefaultShiftEntryForm(shiftSelectedDate ?? ""));
+            }}
+            staffDraft={shiftStaffDraft}
+            setStaffDraft={setShiftStaffDraft}
+            editingStaffId={editingShiftStaffId}
+            onEditEntry={handleEditShiftEntry}
+            onStartEditStaff={(st) => {
+              if (st) {
+                setEditingShiftStaffId(st.id);
+                setShiftStaffDraft({ name: st.name, color: st.color });
+              } else {
+                setEditingShiftStaffId(null);
+              }
+            }}
+            onClearStaffEdit={() => {
+              setEditingShiftStaffId(null);
+              setShiftStaffDraft({
+                name: "",
+                color: pickStaffColor(shiftStaff),
+              });
+            }}
+            staffPanelOpen={shiftStaffPanelOpen}
+            setStaffPanelOpen={setShiftStaffPanelOpen}
+            summary={shiftMonthSummary}
+            saveBusy={shiftSaveBusy}
+            onSaveEntry={() => void handleSaveShiftEntry()}
+            onDeleteEntry={(id) => void handleDeleteShiftEntry(id)}
+            onSaveStaff={() => void handleSaveShiftStaff()}
+            onDeleteStaff={(id) => void handleDeleteShiftStaff(id)}
           />
         )}
         {screen === "list" && (
