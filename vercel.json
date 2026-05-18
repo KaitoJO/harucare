@@ -1,0 +1,7 @@
+{
+  "installCommand": "PUPPETEER_SKIP_DOWNLOAD=true npm ci",
+  "buildCommand": "npm run build",
+  "env": {
+    "PUPPETEER_SKIP_DOWNLOAD": "true"
+  }
+}
