@@ -61,19 +61,19 @@ const HOME_MENU_ITEMS = [
     screen: "hiyari",
   },
   {
-    id: "specialized-plan",
-    title: "専門的支援計画",
-    description: "専門的支援計画の作成・管理",
-    icon: "📑",
-    available: false,
-  },
-  {
     id: "accident",
     title: "事故報告書",
     description: "事故報告・AI分析・PDF出力",
     icon: "📝",
     available: true,
     screen: "accident",
+  },
+  {
+    id: "specialized-plan",
+    title: "専門的支援計画",
+    description: "専門的支援計画の作成・管理",
+    icon: "📑",
+    available: false,
   },
   {
     id: "family-support",
@@ -2553,7 +2553,11 @@ export default function App() {
           <div style={{ fontSize: 10, color: "#8a9a8a" }}>
             {screen === "home"
               ? "機能メニュー"
-              : "個別発達支援プログラム管理"}
+              : screen === "hiyari"
+                ? "ヒヤリハット"
+                : screen === "accident"
+                  ? "事故報告書"
+                  : "個別発達支援プログラム管理"}
           </div>
         </div>
         <div
@@ -2755,7 +2759,9 @@ export default function App() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setScreen(item.screen)}
+                    onClick={() => {
+                      if (item.screen) setScreen(item.screen);
+                    }}
                     style={{
                       ...s.card,
                       position: "relative",
