@@ -194,6 +194,24 @@ function familySupportFromRow(r) {
   };
 }
 
+function parentingSupportFromRow(r) {
+  return {
+    id: r.id,
+    childId: r.child_id ?? null,
+    childName: r.child_name ?? "",
+    conductedAt: r.conducted_at,
+    staffName: r.staff_name ?? "",
+    durationMinutes: r.duration_minutes ?? 0,
+    billable: Boolean(r.billable),
+    payload: r.payload ?? {},
+    aiConsultationRecord: r.ai_consultation_record ?? "",
+    aiChildCharacteristics: r.ai_child_characteristics ?? "",
+    aiParentAdvice: r.ai_parent_advice ?? "",
+    aiHomePractice: r.ai_home_practice ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 function accidentReportFromRow(r) {
   const reportDate = r.report_date
     ? String(r.report_date).slice(0, 10)
@@ -237,6 +255,7 @@ export async function fetchWorkspace(supabase, userId) {
     { data: seRows, error: e11 },
     { data: tcRows, error: e12 },
     { data: sspRows, error: e13 },
+    { data: psRows, error: e14 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -284,9 +303,14 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("parenting_support_records")
+      .select("*")
+      .eq("user_id", userId)
+      .order("conducted_at", { ascending: false }),
   ]);
   const err =
-    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12 || e13;
+    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12 || e13 || e14;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -302,6 +326,7 @@ export async function fetchWorkspace(supabase, userId) {
     shiftEntries: (seRows ?? []).map(shiftEntryFromRow),
     therapyCaseExamples: (tcRows ?? []).map(therapyCaseExampleFromRow),
     savedSpecializedPlans: (sspRows ?? []).map(savedSpecializedPlanFromRow),
+    parentingSupportRecords: (psRows ?? []).map(parentingSupportFromRow),
   };
 }
 
@@ -382,6 +407,11 @@ export async function syncChildNameAcrossWorkspace(supabase, userId, childId, ne
       .eq("child_id", cid),
     supabase
       .from("saved_specialized_plans")
+      .update({ child_name: newName })
+      .eq("user_id", userId)
+      .eq("child_id", cid),
+    supabase
+      .from("parenting_support_records")
       .update({ child_name: newName })
       .eq("user_id", userId)
       .eq("child_id", cid),
@@ -523,6 +553,26 @@ export async function insertFamilySupportRecord(supabase, userId, entry) {
     payload: entry.payload ?? {},
     ai_record_text: entry.aiRecordText ?? "",
     ai_next_suggestion: entry.aiNextSuggestion ?? "",
+    created_at: entry.createdAt,
+  });
+  if (error) throw error;
+}
+
+export async function insertParentingSupportRecord(supabase, userId, entry) {
+  const { error } = await supabase.from("parenting_support_records").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName ?? "",
+    conducted_at: entry.conductedAt,
+    staff_name: entry.staffName ?? "",
+    duration_minutes: entry.durationMinutes ?? 0,
+    billable: Boolean(entry.billable),
+    payload: entry.payload ?? {},
+    ai_consultation_record: entry.aiConsultationRecord ?? "",
+    ai_child_characteristics: entry.aiChildCharacteristics ?? "",
+    ai_parent_advice: entry.aiParentAdvice ?? "",
+    ai_home_practice: entry.aiHomePractice ?? "",
     created_at: entry.createdAt,
   });
   if (error) throw error;
