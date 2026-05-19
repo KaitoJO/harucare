@@ -42,6 +42,22 @@ function savedProgramFromRow(r) {
   };
 }
 
+function savedSpecializedPlanFromRow(r) {
+  return {
+    id: r.id,
+    childName: r.child_name,
+    childId: r.child_id ?? null,
+    createdAt: r.created_at,
+    createdAtLabel: r.created_at_label ?? "",
+    programText: r.program_text,
+    title:
+      r.title != null && String(r.title).trim()
+        ? String(r.title).trim()
+        : undefined,
+    mappedPlan: r.mapped_plan ?? undefined,
+  };
+}
+
 function supportRecordFromRow(r) {
   return {
     id: r.id,
@@ -220,6 +236,7 @@ export async function fetchWorkspace(supabase, userId) {
     { data: ssRows, error: e10 },
     { data: seRows, error: e11 },
     { data: tcRows, error: e12 },
+    { data: sspRows, error: e13 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -262,9 +279,14 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("saved_specialized_plans")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
   ]);
   const err =
-    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12;
+    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12 || e13;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -279,6 +301,7 @@ export async function fetchWorkspace(supabase, userId) {
     shiftStaff: (ssRows ?? []).map(shiftStaffFromRow),
     shiftEntries: (seRows ?? []).map(shiftEntryFromRow),
     therapyCaseExamples: (tcRows ?? []).map(therapyCaseExampleFromRow),
+    savedSpecializedPlans: (sspRows ?? []).map(savedSpecializedPlanFromRow),
   };
 }
 
@@ -357,6 +380,11 @@ export async function syncChildNameAcrossWorkspace(supabase, userId, childId, ne
       .update({ child_name: newName })
       .eq("user_id", userId)
       .eq("child_id", cid),
+    supabase
+      .from("saved_specialized_plans")
+      .update({ child_name: newName })
+      .eq("user_id", userId)
+      .eq("child_id", cid),
   ];
   const results = await Promise.all(tasks);
   const err = results.find((r) => r.error)?.error;
@@ -381,6 +409,21 @@ export async function deleteChild(supabase, userId, childId) {
 
 export async function insertSavedProgram(supabase, userId, entry) {
   const { error } = await supabase.from("saved_programs").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName,
+    created_at: entry.createdAt,
+    created_at_label: entry.createdAtLabel,
+    program_text: entry.programText,
+    title: entry.title ?? null,
+    mapped_plan: entry.mappedPlan ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function insertSavedSpecializedPlan(supabase, userId, entry) {
+  const { error } = await supabase.from("saved_specialized_plans").insert({
     id: entry.id,
     user_id: userId,
     child_id: entry.childId ?? null,

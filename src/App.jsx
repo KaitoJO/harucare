@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { exportSupportPlanPdf, supportPlanFormalPdfFilename } from "./exportSupportPlanPdf.js";
 import { mountAndExportAccidentReportPdf } from "./exportAccidentReportPdf.jsx";
+import { mountAndExportSpecializedPlanPdf } from "./exportSpecializedPlanPdf.jsx";
 import { mountAndExportFamilySupportPdf } from "./exportFamilySupportPdf.jsx";
 import { getSupabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
 import * as workspaceDb from "./lib/workspaceDb.js";
@@ -38,6 +39,7 @@ import {
   yearMonthFromDateStr,
 } from "./familySupportConfig.js";
 import AccidentReportScreen from "./AccidentReportScreen.jsx";
+import SpecializedSupportPlanScreen from "./SpecializedSupportPlanScreen.jsx";
 import FamilySupportScreen from "./FamilySupportScreen.jsx";
 import ShiftScreen from "./ShiftScreen.jsx";
 import CaseExampleScreen from "./CaseExampleScreen.jsx";
@@ -58,6 +60,14 @@ import {
 } from "./shiftConfig.js";
 import AuthScreen from "./AuthScreen.jsx";
 import { buildFormalPlanDocument } from "./supportPlanMapper.js";
+import { buildMappedSpecializedPlan } from "./specializedPlanMapper.js";
+import {
+  buildSpecializedPlanProgramText,
+  createDefaultSpecializedPlanForm,
+  parseSpecializedPlanAiGoals,
+  resolveSpecializedChildName,
+  specializedPlanFormFromRecord,
+} from "./specializedPlanConfig.js";
 import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
 
 const DISABILITY_TYPES = [
@@ -81,6 +91,7 @@ const HOME_MENU_ENABLED_SCREENS = new Set([
   "list",
   "hiyari",
   "accident",
+  "specializedPlan",
   "familySupport",
   "shift",
   "case",
@@ -121,7 +132,8 @@ const HOME_MENU_ITEMS = [
     title: "専門的支援計画",
     description: "専門的支援計画の作成・管理",
     icon: "📑",
-    available: false,
+    available: true,
+    screen: "specializedPlan",
   },
   {
     id: "family-support",
@@ -1361,6 +1373,53 @@ async function requestAccidentAnalysisFromClaude(form, childLabel) {
   });
 }
 
+const SPECIALIZED_PLAN_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの専門的支援（理学療法・作業療法・言語聴覚・心理等）に精通した専門家です。
+「現在の状況」に基づき、専門的支援計画書の目標1・目標2を日本語で作成してください。
+
+5領域は次のいずれかから選び、該当するものを列挙すること：
+健康・生活、運動・感覚、認知・行動、言語・コミュニケーション、人間関係・社会性
+
+出力形式（必ずこの見出し順・Markdown。目標1と目標2の両方を出力）：
+
+## 目標1
+### 5領域
+### 実施タイミング
+### ねらい
+### 活動例
+### 実施方法
+
+## 目標2
+### 5領域
+### 実施タイミング
+### ねらい
+### 活動例
+### 実施方法
+
+・現場で実行可能な具体性で書くこと。
+・目標1と目標2は異なる領域・ねらいを意識すること。
+・箇条書き可。マークダウン記号（**等）は使わずプレーンテキストで。
+・前置き・謝罪・締めの定型文は不要。本文のみ。`;
+
+function buildSpecializedPlanAiUserPrompt(form, childLabel) {
+  return `【専門的支援計画書】
+事業所：${String(form.facilityName ?? "").trim() || "（未入力）"}
+児童：${childLabel}
+生年月日：${form.birthDate || "（未入力）"}
+
+【現在の状況】
+${String(form.currentStatus ?? "").trim() || "（未入力）"}
+
+上記に基づき、目標1・目標2を出力してください。`;
+}
+
+async function requestSpecializedPlanGoalsFromClaude(form, childLabel) {
+  return requestClaudeCompletion({
+    system: SPECIALIZED_PLAN_AI_SYSTEM,
+    userContent: buildSpecializedPlanAiUserPrompt(form, childLabel),
+    max_tokens: 4096,
+  });
+}
+
 const FAMILY_SUPPORT_AI_SYSTEM = `あなたは児童発達支援・放課後等デイサービスの家族支援加算に精通した専門家です。
 保護者への相談支援の記録から、加算申請・実地指導に耐える正式な記録文と次回提案を日本語で作成してください。
 
@@ -1513,6 +1572,13 @@ export default function App() {
   const [accidentSaveBusy, setAccidentSaveBusy] = useState(false);
   const [accidentPdfBusy, setAccidentPdfBusy] = useState(false);
   const [accidentReports, setAccidentReports] = useState([]);
+  const [specializedPlanForm, setSpecializedPlanForm] = useState(() =>
+    createDefaultSpecializedPlanForm(loadWorkspaceSettings()),
+  );
+  const [specializedPlanAiLoading, setSpecializedPlanAiLoading] = useState(false);
+  const [specializedPlanSaveBusy, setSpecializedPlanSaveBusy] = useState(false);
+  const [specializedPlanPdfBusy, setSpecializedPlanPdfBusy] = useState(false);
+  const [savedSpecializedPlans, setSavedSpecializedPlans] = useState([]);
   const [familySupportForm, setFamilySupportForm] = useState(
     createDefaultFamilySupportForm,
   );
@@ -1671,6 +1737,7 @@ export default function App() {
           setPlanFeedbacks(w.planFeedbacks);
           setHiyariHattoRecords(w.hiyariHattoRecords ?? []);
           setAccidentReports(w.accidentReports ?? []);
+          setSavedSpecializedPlans(w.savedSpecializedPlans ?? []);
           setFamilySupportRecords(w.familySupportRecords ?? []);
           setShiftStaff(w.shiftStaff ?? []);
           setShiftEntries(w.shiftEntries ?? []);
@@ -2300,6 +2367,11 @@ export default function App() {
       facilityName: next.facilityName,
       authorName: f.authorName.trim() ? f.authorName : next.defaultAuthorName,
     }));
+    setSpecializedPlanForm((f) => ({
+      ...f,
+      facilityName: next.facilityName,
+      authorName: f.authorName.trim() ? f.authorName : next.defaultAuthorName,
+    }));
     showSaveToast();
   };
 
@@ -2407,6 +2479,93 @@ export default function App() {
 
   const handleOpenAccidentRecord = (record) => {
     setAccidentForm(accidentFormFromRecord(record));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleGenerateSpecializedPlanGoals = async () => {
+    if (!specializedPlanForm.currentStatus?.trim()) {
+      setError("現在の状況を入力してください。");
+      return;
+    }
+    setError(null);
+    setSpecializedPlanAiLoading(true);
+    try {
+      const childLabel = resolveSpecializedChildName(specializedPlanForm, children);
+      const text = await requestSpecializedPlanGoalsFromClaude(
+        specializedPlanForm,
+        childLabel,
+      );
+      const goals = parseSpecializedPlanAiGoals(text);
+      setSpecializedPlanForm((f) => ({
+        ...f,
+        goal1: { ...f.goal1, ...goals.goal1 },
+        goal2: { ...f.goal2, ...goals.goal2 },
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSpecializedPlanAiLoading(false);
+    }
+  };
+
+  const handleSaveSpecializedPlan = async () => {
+    if (!specializedPlanForm.childName?.trim()) {
+      setError("児童名を入力してください。");
+      return;
+    }
+    if (!specializedPlanForm.currentStatus?.trim()) {
+      setError("現在の状況を入力してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+
+    const childLabel = resolveSpecializedChildName(specializedPlanForm, children);
+    const createdAt = new Date().toISOString();
+    const mappedPlan = buildMappedSpecializedPlan(specializedPlanForm);
+    const entry = {
+      id: `${createdAt}:${Math.random().toString(16).slice(2)}`,
+      childId: specializedPlanForm.childId || null,
+      childName: childLabel,
+      createdAt,
+      createdAtLabel: formatJaDateTime(createdAt),
+      programText: buildSpecializedPlanProgramText(specializedPlanForm),
+      title: "専門的支援計画書",
+      mappedPlan,
+    };
+
+    setSpecializedPlanSaveBusy(true);
+    try {
+      await workspaceDb.insertSavedSpecializedPlan(supabase, session.user.id, entry);
+      setSavedSpecializedPlans((prev) => [entry, ...prev]);
+      setSpecializedPlanForm(createDefaultSpecializedPlanForm(loadWorkspaceSettings()));
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSpecializedPlanSaveBusy(false);
+    }
+  };
+
+  const handleExportSpecializedPlanPdf = async (formOrRecord) => {
+    setSpecializedPlanPdfBusy(true);
+    try {
+      const doc =
+        formOrRecord?.mappedPlan ??
+        buildMappedSpecializedPlan(
+          formOrRecord?.childName != null && formOrRecord?.currentStatus != null
+            ? formOrRecord
+            : specializedPlanForm,
+        );
+      await mountAndExportSpecializedPlanPdf({ doc });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSpecializedPlanPdfBusy(false);
+    }
+  };
+
+  const handleOpenSpecializedPlanRecord = (record) => {
+    setSpecializedPlanForm(specializedPlanFormFromRecord(record));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -2924,6 +3083,7 @@ export default function App() {
       screen === "list" ||
       screen === "hiyari" ||
       screen === "accident" ||
+      screen === "specializedPlan" ||
       screen === "familySupport" ||
       screen === "shift" ||
       screen === "case"
@@ -3184,7 +3344,9 @@ export default function App() {
                 ? "ヒヤリハット"
                 : screen === "accident"
                   ? "事故報告書"
-                  : screen === "familySupport"
+                  : screen === "specializedPlan"
+                    ? "専門的支援計画"
+                    : screen === "familySupport"
                     ? "家族支援加算"
                     : screen === "shift"
                       ? "シフト作成"
@@ -3755,6 +3917,35 @@ export default function App() {
             accidentRecords={accidentReports}
             formatJaDateTime={formatJaDateTime}
             onOpenRecord={handleOpenAccidentRecord}
+          />
+        )}
+        {screen === "specializedPlan" && (
+          <SpecializedSupportPlanScreen
+            s={s}
+            form={specializedPlanForm}
+            setForm={setSpecializedPlanForm}
+            childrenList={children}
+            workspaceSettingsOpen={workspaceSettingsOpen}
+            setWorkspaceSettingsOpen={setWorkspaceSettingsOpen}
+            facilityNameInput={facilityNameInput}
+            setFacilityNameInput={setFacilityNameInput}
+            defaultAuthorInput={defaultAuthorInput}
+            setDefaultAuthorInput={setDefaultAuthorInput}
+            onSaveWorkspaceSettings={handleSaveWorkspaceSettings}
+            VoiceTextarea={VoiceAppendTextarea}
+            aiLoading={specializedPlanAiLoading}
+            onGenerateGoals={() => void handleGenerateSpecializedPlanGoals()}
+            saveBusy={specializedPlanSaveBusy}
+            onSave={() => void handleSaveSpecializedPlan()}
+            pdfBusy={specializedPlanPdfBusy}
+            onExportPdf={(f) => void handleExportSpecializedPlanPdf(f)}
+            canSave={Boolean(
+              specializedPlanForm.childName?.trim() &&
+                specializedPlanForm.currentStatus?.trim(),
+            )}
+            savedRecords={savedSpecializedPlans}
+            formatJaDateTime={formatJaDateTime}
+            onOpenRecord={handleOpenSpecializedPlanRecord}
           />
         )}
         {screen === "familySupport" && (
