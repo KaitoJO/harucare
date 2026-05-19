@@ -89,6 +89,13 @@ import {
 import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
 import { fetchSupportPlanRagContext } from "./lib/supportPlanRag.js";
 import {
+  appendVoiceTranscript,
+  getVoiceInputMode,
+  isVoiceInputSupported,
+  recordAndTranscribeWithWhisper,
+  startWebSpeechRecognition,
+} from "./lib/voiceInput.js";
+import {
   ingestFamilySupportRag,
   ingestParentingSupportRag,
   ingestSavedProgramRag,
@@ -749,17 +756,6 @@ async function mountAndExportFormalSupportPlanPdf({
   }
 }
 
-function appendVoiceTranscript(prev, addition) {
-  const a = String(addition ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!a) return prev ?? "";
-  const p = prev ?? "";
-  if (!p) return a;
-  const sep = /\s$/.test(p) || p.endsWith("\n") ? "" : " ";
-  return `${p}${sep}${a}`;
-}
-
 /** VoiceAppendTextarea 用（App 内の s.textarea と同等） */
 const sTextareaBase = {
   width: "100%",
@@ -775,83 +771,20 @@ const sTextareaBase = {
   lineHeight: 1.6,
 };
 
-function pickMediaRecorderMimeType() {
-  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) {
-    return "";
-  }
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-    "audio/ogg;codecs=opus",
-  ];
-  for (const t of candidates) {
-    if (MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return "";
-}
-
-function isWhisperVoiceSupported() {
-  return (
-    typeof window !== "undefined" &&
-    typeof navigator !== "undefined" &&
-    !!navigator.mediaDevices?.getUserMedia &&
-    typeof MediaRecorder !== "undefined"
-  );
-}
-
-async function transcribeAudioWithOpenAI(blob) {
-  const base64 = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => {
-      const s = String(fr.result || "");
-      const i = s.indexOf(",");
-      resolve(i >= 0 ? s.slice(i + 1) : s);
-    };
-    fr.onerror = () => reject(new Error("音声の読み込みに失敗しました"));
-    fr.readAsDataURL(blob);
-  });
-
-  const res = await fetch("/api/whisper", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      audioBase64: base64,
-      mimeType: blob.type || "audio/webm",
-    }),
-  });
-
-  let data = {};
-  try {
-    data = await res.json();
-  } catch {
-    /* ignore */
-  }
-
-  if (!res.ok) {
-    throw new Error(
-      data?.error?.message ||
-        (typeof data?.error === "string" ? data.error : "") ||
-        `音声認識に失敗しました（${res.status}）`,
-    );
-  }
-
-  return typeof data.text === "string" ? data.text : "";
-}
-
 /**
- * テキストエリア右下にマイク。MediaRecorder で録音し OpenAI Whisper に送信。結果は既存テキストに追記。
- * API キー未設定または非対応環境ではマイク非表示。
+ * テキストエリア右下にマイク。
+ * 優先: ブラウザ標準 SpeechRecognition（API キー不要）
+ * 代替: MediaRecorder + Whisper
  */
 function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
-  const supported = useMemo(() => isWhisperVoiceSupported(), []);
+  const voiceMode = useMemo(() => getVoiceInputMode(), []);
+  const supported = useMemo(() => isVoiceInputSupported(), []);
   const valueRef = useRef(value);
-  const streamRef = useRef(null);
-  const chunksRef = useRef([]);
-  const recorderRef = useRef(null);
+  const sessionRef = useRef(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [interimText, setInterimText] = useState("");
 
   useEffect(() => {
     valueRef.current = value;
@@ -862,109 +795,96 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
     window.setTimeout(() => setVoiceError(""), 5000);
   }, []);
 
-  const stopStream = useCallback(() => {
-    streamRef.current?.getTracks?.().forEach((tr) => tr.stop());
-    streamRef.current = null;
-  }, []);
-
   useEffect(
     () => () => {
-      try {
-        recorderRef.current?.stop?.();
-      } catch {
-        /* ignore */
-      }
-      stopStream();
+      sessionRef.current?.abort?.();
+      sessionRef.current = null;
     },
-    [stopStream],
+    [],
   );
 
   const onMicClick = useCallback(async () => {
     if (transcribing) return;
 
-    if (recording && recorderRef.current) {
-      try {
-        if (recorderRef.current.state === "recording") {
-          recorderRef.current.requestData?.();
-        }
-        recorderRef.current.stop();
-      } catch {
-        /* ignore */
-      }
-      recorderRef.current = null;
+    if (recording && sessionRef.current) {
       setRecording(false);
+      setInterimText("");
+      const session = sessionRef.current;
+      sessionRef.current = null;
+
+      try {
+        setTranscribing(true);
+        setVoiceError("");
+        const text = await session.stop();
+        if (!String(text ?? "").trim()) {
+          showVoiceFailureMessage("音声を認識できませんでした");
+          return;
+        }
+        const next = appendVoiceTranscript(valueRef.current, text);
+        valueRef.current = next;
+        onValueChange(next);
+      } catch (e) {
+        showVoiceFailureMessage(
+          e instanceof Error ? e.message : "音声認識に失敗しました",
+        );
+      } finally {
+        setTranscribing(false);
+      }
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-      streamRef.current = stream;
-      chunksRef.current = [];
+    setVoiceError("");
+    setInterimText("");
 
-      const mimeType = pickMediaRecorderMimeType();
-      const rec = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-      const usedMime = rec.mimeType || mimeType || "audio/webm";
+    if (voiceMode === "webspeech") {
+      try {
+        const session = startWebSpeechRecognition({
+          onInterim: (text) => setInterimText(text),
+          onError: (message) => showVoiceFailureMessage(message),
+        });
+        sessionRef.current = session;
+        setRecording(true);
+      } catch (e) {
+        showVoiceFailureMessage(
+          e instanceof Error ? e.message : "音声認識を開始できませんでした",
+        );
+      }
+      return;
+    }
 
-      rec.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      rec.onstop = async () => {
-        stopStream();
-        recorderRef.current = null;
-        const blob = new Blob(chunksRef.current, { type: usedMime });
-        chunksRef.current = [];
-        if (blob.size === 0) {
-          showVoiceFailureMessage("録音データがありません。もう一度お試しください");
-          return;
-        }
-
-        setTranscribing(true);
-        setVoiceError("");
-        try {
-          const text = await transcribeAudioWithOpenAI(blob);
-          if (!String(text ?? "").trim()) {
-            showVoiceFailureMessage("音声を認識できませんでした");
-            return;
-          }
-          const next = appendVoiceTranscript(valueRef.current, text);
-          valueRef.current = next;
-          onValueChange(next);
-        } catch (e) {
-          showVoiceFailureMessage(
-            e instanceof Error ? e.message : "音声認識に失敗しました",
-          );
-        } finally {
-          setTranscribing(false);
-        }
-      };
-
-      recorderRef.current = rec;
-      rec.start(250);
-      setRecording(true);
-      setVoiceError("");
-    } catch (e) {
-      showVoiceFailureMessage(
-        e instanceof Error && e.name === "NotAllowedError"
-          ? "マイクの使用が許可されていません"
-          : "マイクを開始できませんでした",
-      );
+    if (voiceMode === "whisper") {
+      try {
+        const session = await recordAndTranscribeWithWhisper({
+          onTranscribing: () => setTranscribing(true),
+        });
+        session.start();
+        sessionRef.current = session;
+        setRecording(true);
+      } catch (e) {
+        showVoiceFailureMessage(
+          e instanceof Error && e.name === "NotAllowedError"
+            ? "マイクの使用が許可されていません"
+            : e instanceof Error
+              ? e.message
+              : "マイクを開始できませんでした",
+        );
+      }
     }
   }, [
     onValueChange,
     recording,
     showVoiceFailureMessage,
-    stopStream,
     transcribing,
+    voiceMode,
   ]);
 
   const statusLabel = transcribing
     ? "認識中..."
-    : voiceError || "";
+    : recording && interimText
+      ? `聞き取り中… ${interimText}`
+      : recording
+        ? "話してください（停止で確定）"
+        : voiceError || "";
 
   const busy = transcribing;
 
@@ -1007,10 +927,12 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
             type="button"
             title={
               recording
-                ? "録音を停止して認識"
+                ? "停止してテキストに反映"
                 : busy
                   ? "認識中"
-                  : "音声で入力"
+                  : voiceMode === "webspeech"
+                    ? "音声で入力（ブラウザ認識）"
+                    : "音声で入力"
             }
             disabled={busy}
             onClick={() => {
