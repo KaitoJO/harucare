@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "verify:pdf": "vite-node scripts/verify-formal-pdf-pages.mjs"
+    "verify:pdf": "vite-node scripts/verify-formal-pdf-pages.mjs",
+    "seed:rag": "node scripts/seed-support-plan-rag.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

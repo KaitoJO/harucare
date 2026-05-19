@@ -1,11 +1,17 @@
-/** Vercel serverless: forwards audio to OpenAI Whisper (avoids browser CORS). */
+/** Vercel serverless: OpenAI Whisper へ音声を転送（API キーはサーバー側のみ） */
+
+function getOpenAiKey() {
+  return (
+    process.env.OPENAI_API_KEY?.trim() ||
+    process.env.VITE_OPENAI_API_KEY?.trim() ||
+    ""
+  );
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization",
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
     res.status(204).end();
@@ -13,19 +19,18 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: { message: "Method not allowed" } });
     return;
   }
 
-  const auth = req.headers.authorization;
-  const bearer =
-    typeof auth === "string" && auth.startsWith("Bearer ")
-      ? auth
-      : Array.isArray(auth) && auth[0]?.startsWith("Bearer ")
-        ? auth[0]
-        : "";
-  if (!bearer) {
-    res.status(401).json({ error: "Missing API key" });
+  const openaiKey = getOpenAiKey();
+  if (!openaiKey) {
+    res.status(503).json({
+      error: {
+        message:
+          "OPENAI_API_KEY が未設定です。.env または Vercel 環境変数を確認してください。",
+      },
+    });
     return;
   }
 
@@ -37,7 +42,7 @@ export default async function handler(req, res) {
   const mimeType = typeof raw.mimeType === "string" ? raw.mimeType : "";
 
   if (!audioBase64 || typeof audioBase64 !== "string") {
-    res.status(400).json({ error: "Missing audio" });
+    res.status(400).json({ error: { message: "音声データがありません" } });
     return;
   }
 
@@ -45,7 +50,14 @@ export default async function handler(req, res) {
   try {
     buf = Buffer.from(audioBase64, "base64");
   } catch {
-    res.status(400).json({ error: "Invalid audio" });
+    res.status(400).json({ error: { message: "音声データの形式が不正です" } });
+    return;
+  }
+
+  if (buf.length < 100) {
+    res.status(400).json({
+      error: { message: "録音が短すぎます。もう少し話してから停止してください" },
+    });
     return;
   }
 
@@ -54,7 +66,9 @@ export default async function handler(req, res) {
       ? "m4a"
       : mimeType.includes("ogg")
         ? "ogg"
-        : "webm";
+        : mimeType.includes("wav")
+          ? "wav"
+          : "webm";
   const filename = `audio.${ext}`;
 
   const form = new FormData();
@@ -70,12 +84,35 @@ export default async function handler(req, res) {
     "https://api.openai.com/v1/audio/transcriptions",
     {
       method: "POST",
-      headers: { Authorization: bearer },
+      headers: { Authorization: `Bearer ${openaiKey}` },
       body: form,
     },
   );
 
   const text = await upstream.text();
-  const ct = upstream.headers.get("content-type") || "application/json";
-  res.status(upstream.status).setHeader("Content-Type", ct).send(text);
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    res.status(502).json({
+      error: { message: text.slice(0, 240) || "Whisper API error" },
+    });
+    return;
+  }
+
+  if (!upstream.ok) {
+    res.status(upstream.status).json({
+      error: {
+        message:
+          payload?.error?.message ||
+          text.slice(0, 240) ||
+          "Whisper API error",
+      },
+    });
+    return;
+  }
+
+  res.status(200).json({
+    text: typeof payload.text === "string" ? payload.text : "",
+  });
 }

@@ -87,6 +87,13 @@ import {
   specializedPlanFormFromRecord,
 } from "./specializedPlanConfig.js";
 import { FormalSupportPlanPdfMount } from "./FormalSupportPlanPdf.jsx";
+import { fetchSupportPlanRagContext } from "./lib/supportPlanRag.js";
+import {
+  ingestFamilySupportRag,
+  ingestParentingSupportRag,
+  ingestSavedProgramRag,
+  ingestSpecializedPlanRag,
+} from "./ragIngest.js";
 
 const DISABILITY_TYPES = [
   "自閉スペクトラム症",
@@ -787,46 +794,13 @@ function pickMediaRecorderMimeType() {
 function isWhisperVoiceSupported() {
   return (
     typeof window !== "undefined" &&
-    !!import.meta.env.VITE_OPENAI_API_KEY &&
     typeof navigator !== "undefined" &&
     !!navigator.mediaDevices?.getUserMedia &&
     typeof MediaRecorder !== "undefined"
   );
 }
 
-async function transcribeAudioWithOpenAI(blob, apiKey) {
-  if (import.meta.env.DEV) {
-    const fd = new FormData();
-    const type = blob.type || "audio/webm";
-    const ext =
-      type.includes("mp4") || type.includes("m4a")
-        ? "m4a"
-        : type.includes("ogg")
-          ? "ogg"
-          : "webm";
-    fd.append("file", blob, `recording.${ext}`);
-    fd.append("model", "whisper-1");
-    fd.append("language", "ja");
-
-    const res = await fetch("/openai-api/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: fd,
-    });
-    if (!res.ok) {
-      let detail = res.statusText;
-      try {
-        const errJson = await res.json();
-        if (errJson?.error?.message) detail = errJson.error.message;
-      } catch {
-        /* ignore */
-      }
-      throw new Error(detail);
-    }
-    const data = await res.json();
-    return typeof data.text === "string" ? data.text : "";
-  }
-
+async function transcribeAudioWithOpenAI(blob) {
   const base64 = await new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => {
@@ -834,32 +808,34 @@ async function transcribeAudioWithOpenAI(blob, apiKey) {
       const i = s.indexOf(",");
       resolve(i >= 0 ? s.slice(i + 1) : s);
     };
-    fr.onerror = () => reject(new Error("read failed"));
+    fr.onerror = () => reject(new Error("音声の読み込みに失敗しました"));
     fr.readAsDataURL(blob);
   });
 
   const res = await fetch("/api/whisper", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       audioBase64: base64,
       mimeType: blob.type || "audio/webm",
     }),
   });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const errJson = await res.json();
-      if (errJson?.error?.message) detail = errJson.error.message;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
+
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    /* ignore */
   }
-  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      data?.error?.message ||
+        (typeof data?.error === "string" ? data.error : "") ||
+        `音声認識に失敗しました（${res.status}）`,
+    );
+  }
+
   return typeof data.text === "string" ? data.text : "";
 }
 
@@ -875,15 +851,15 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
   const recorderRef = useRef(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
-  const [voiceError, setVoiceError] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
 
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
 
-  const showVoiceFailureMessage = useCallback(() => {
-    setVoiceError(true);
-    window.setTimeout(() => setVoiceError(false), 4000);
+  const showVoiceFailureMessage = useCallback((message) => {
+    setVoiceError(message || "音声認識に失敗しました");
+    window.setTimeout(() => setVoiceError(""), 5000);
   }, []);
 
   const stopStream = useCallback(() => {
@@ -904,8 +880,7 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
   );
 
   const onMicClick = useCallback(async () => {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey || transcribing) return;
+    if (transcribing) return;
 
     if (recording && recorderRef.current) {
       try {
@@ -943,17 +918,26 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
         recorderRef.current = null;
         const blob = new Blob(chunksRef.current, { type: usedMime });
         chunksRef.current = [];
-        if (blob.size === 0) return;
+        if (blob.size === 0) {
+          showVoiceFailureMessage("録音データがありません。もう一度お試しください");
+          return;
+        }
 
         setTranscribing(true);
-        setVoiceError(false);
+        setVoiceError("");
         try {
-          const text = await transcribeAudioWithOpenAI(blob, apiKey);
+          const text = await transcribeAudioWithOpenAI(blob);
+          if (!String(text ?? "").trim()) {
+            showVoiceFailureMessage("音声を認識できませんでした");
+            return;
+          }
           const next = appendVoiceTranscript(valueRef.current, text);
           valueRef.current = next;
           onValueChange(next);
-        } catch {
-          showVoiceFailureMessage();
+        } catch (e) {
+          showVoiceFailureMessage(
+            e instanceof Error ? e.message : "音声認識に失敗しました",
+          );
         } finally {
           setTranscribing(false);
         }
@@ -962,9 +946,13 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
       recorderRef.current = rec;
       rec.start(250);
       setRecording(true);
-      setVoiceError(false);
-    } catch {
-      showVoiceFailureMessage();
+      setVoiceError("");
+    } catch (e) {
+      showVoiceFailureMessage(
+        e instanceof Error && e.name === "NotAllowedError"
+          ? "マイクの使用が許可されていません"
+          : "マイクを開始できませんでした",
+      );
     }
   }, [
     onValueChange,
@@ -974,12 +962,11 @@ function VoiceAppendTextarea({ value, onValueChange, rows, placeholder }) {
     transcribing,
   ]);
 
-  const busy = transcribing;
   const statusLabel = transcribing
     ? "認識中..."
-    : voiceError
-      ? "音声認識に失敗しました"
-      : "";
+    : voiceError || "";
+
+  const busy = transcribing;
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -1275,8 +1262,15 @@ async function requestClaudeCompletion({ system, userContent, max_tokens = 8192 
   return text;
 }
 
-async function requestProgramFromClaude(child, extraPlanPrompt = "") {
-  const userContent = `${REFERENCE_CASE}\n\n${buildUserPrompt(child, extraPlanPrompt)}`;
+async function requestProgramFromClaude(child, extraPlanPrompt = "", userId = "") {
+  const ragContext = await fetchSupportPlanRagContext(
+    child,
+    extraPlanPrompt,
+    4,
+    userId,
+  );
+  const ragBlock = ragContext ? `\n\n${ragContext}\n` : "";
+  const userContent = `${REFERENCE_CASE}${ragBlock}\n\n${buildUserPrompt(child, extraPlanPrompt)}`;
   return requestClaudeCompletion({
     system: SYSTEM_PROMPT,
     userContent,
@@ -2177,7 +2171,11 @@ export default function App() {
     setLoading(true);
     setScreen("program");
     try {
-      const text = await requestProgramFromClaude(selectedChild, planPromptExtra);
+      const text = await requestProgramFromClaude(
+        selectedChild,
+        planPromptExtra,
+        session.user.id,
+      );
       setGeneratedProgram(text);
       setProgramAiOriginal(text);
       setGeneratedAtIso(new Date().toISOString());
@@ -2229,6 +2227,7 @@ export default function App() {
     try {
       await workspaceDb.insertSavedProgram(supabase, session.user.id, entry);
       setSavedPrograms((prev) => [entry, ...prev]);
+      ingestSavedProgramRag(session.user.id, entry, selectedChild, supabase);
       showSaveToast();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -2604,6 +2603,7 @@ export default function App() {
     try {
       await workspaceDb.insertSavedSpecializedPlan(supabase, session.user.id, entry);
       setSavedSpecializedPlans((prev) => [entry, ...prev]);
+      ingestSpecializedPlanRag(session.user.id, entry, supabase);
       setSpecializedPlanForm(createDefaultSpecializedPlanForm(loadWorkspaceSettings()));
       showSaveToast();
     } catch (e) {
@@ -2764,6 +2764,7 @@ export default function App() {
         entry,
       );
       setFamilySupportRecords((prev) => [entry, ...prev]);
+      ingestFamilySupportRag(session.user.id, entry, supabase);
       setFamilySupportForm(createDefaultFamilySupportForm());
       showSaveToast();
     } catch (e) {
@@ -2950,6 +2951,7 @@ export default function App() {
         entry,
       );
       setParentingSupportRecords((prev) => [entry, ...prev]);
+      ingestParentingSupportRag(session.user.id, entry, supabase);
       setParentingSupportForm(createDefaultParentingSupportForm());
       showSaveToast();
     } catch (e) {

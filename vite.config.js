@@ -1,6 +1,31 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
+function createApiResAdapter(res) {
+  let statusCode = 200
+  return {
+    setHeader(k, v) {
+      res.setHeader(k, v)
+      return this
+    },
+    status(code) {
+      statusCode = code
+      return this
+    },
+    json(obj) {
+      res.statusCode = statusCode
+      if (!res.getHeader('Content-Type')) {
+        res.setHeader('Content-Type', 'application/json')
+      }
+      res.end(JSON.stringify(obj))
+    },
+    end(data) {
+      res.statusCode = statusCode
+      res.end(data)
+    },
+  }
+}
+
 /** Dev のみ: POST /api/anthropic を Anthropic へ中継し API キーはサーバー側 (.env の ANTHROPIC_API_KEY) で付与 */
 function anthropicDevProxy(env) {
   return {
@@ -8,7 +33,12 @@ function anthropicDevProxy(env) {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const pathOnly = req.url?.split('?')[0] ?? ''
-        if (pathOnly !== '/api/anthropic') {
+        if (
+          pathOnly !== '/api/anthropic' &&
+          pathOnly !== '/api/rag-search' &&
+          pathOnly !== '/api/rag-ingest' &&
+          pathOnly !== '/api/whisper'
+        ) {
           next()
           return
         }
@@ -21,6 +51,49 @@ function anthropicDevProxy(env) {
           res.statusCode = 405
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ error: { message: 'Method not allowed' } }))
+          return
+        }
+
+        if (
+          pathOnly === '/api/rag-search' ||
+          pathOnly === '/api/rag-ingest' ||
+          pathOnly === '/api/whisper'
+        ) {
+          const chunks = []
+          for await (const chunk of req) chunks.push(chunk)
+          const bodyRaw = Buffer.concat(chunks)
+          let body = {}
+          try {
+            body = bodyRaw.length ? JSON.parse(bodyRaw.toString('utf8')) : {}
+          } catch {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: { message: 'Invalid JSON' } }))
+            return
+          }
+
+          try {
+            const mod =
+              pathOnly === '/api/rag-search'
+                ? await import('../api/rag-search.js')
+                : pathOnly === '/api/rag-ingest'
+                  ? await import('../api/rag-ingest.js')
+                  : await import('../api/whisper.js')
+            await mod.default(
+              { method: req.method, headers: req.headers, body },
+              createApiResAdapter(res),
+            )
+          } catch (e) {
+            res.statusCode = 502
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                error: {
+                  message: e instanceof Error ? e.message : 'API failed',
+                },
+              }),
+            )
+          }
           return
         }
 
@@ -89,14 +162,6 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react(), anthropicDevProxy(env)],
-    server: {
-      proxy: {
-        '/openai-api': {
-          target: 'https://api.openai.com',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/openai-api/, ''),
-        },
-      },
-    },
+    server: {},
   }
 })
