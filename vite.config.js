@@ -37,7 +37,8 @@ function anthropicDevProxy(env) {
           pathOnly !== '/api/anthropic' &&
           pathOnly !== '/api/rag-search' &&
           pathOnly !== '/api/rag-ingest' &&
-          pathOnly !== '/api/whisper'
+          pathOnly !== '/api/whisper' &&
+          pathOnly !== '/api/line-webhook'
         ) {
           next()
           return
@@ -45,6 +46,26 @@ function anthropicDevProxy(env) {
         if (req.method === 'OPTIONS') {
           res.statusCode = 204
           res.end()
+          return
+        }
+        if (pathOnly === '/api/line-webhook' && req.method === 'GET') {
+          try {
+            const mod = await import('../api/line-webhook.js')
+            await mod.default(
+              { method: 'GET', headers: req.headers },
+              createApiResAdapter(res),
+            )
+          } catch (e) {
+            res.statusCode = 502
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                error: {
+                  message: e instanceof Error ? e.message : 'API failed',
+                },
+              }),
+            )
+          }
           return
         }
         if (req.method !== 'POST') {
@@ -57,11 +78,38 @@ function anthropicDevProxy(env) {
         if (
           pathOnly === '/api/rag-search' ||
           pathOnly === '/api/rag-ingest' ||
-          pathOnly === '/api/whisper'
+          pathOnly === '/api/whisper' ||
+          pathOnly === '/api/line-webhook'
         ) {
           const chunks = []
           for await (const chunk of req) chunks.push(chunk)
           const bodyRaw = Buffer.concat(chunks)
+
+          if (pathOnly === '/api/line-webhook') {
+            try {
+              const mod = await import('../api/line-webhook.js')
+              const mockReq = {
+                method: req.method,
+                headers: req.headers,
+                async *[Symbol.asyncIterator]() {
+                  yield bodyRaw
+                },
+              }
+              await mod.default(mockReq, createApiResAdapter(res))
+            } catch (e) {
+              res.statusCode = 502
+              res.setHeader('Content-Type', 'application/json')
+              res.end(
+                JSON.stringify({
+                  error: {
+                    message: e instanceof Error ? e.message : 'API failed',
+                  },
+                }),
+              )
+            }
+            return
+          }
+
           let body = {}
           try {
             body = bodyRaw.length ? JSON.parse(bodyRaw.toString('utf8')) : {}

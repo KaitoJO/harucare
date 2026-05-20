@@ -60,6 +60,7 @@ import SpecializedSupportPlanScreen from "./SpecializedSupportPlanScreen.jsx";
 import FamilySupportScreen from "./FamilySupportScreen.jsx";
 import ParentingSupportScreen from "./ParentingSupportScreen.jsx";
 import ShiftScreen from "./ShiftScreen.jsx";
+import AbsenceScreen from "./AbsenceScreen.jsx";
 import CaseExampleScreen from "./CaseExampleScreen.jsx";
 import {
   caseExampleFormFromRecord,
@@ -76,6 +77,13 @@ import {
   pickStaffColor,
   shiftTypeHasTime,
 } from "./shiftConfig.js";
+import {
+  buildPreviousMonthSummary,
+  createDefaultAbsenceForm,
+  createDefaultScheduleForm,
+  previousYearMonth,
+  resolveBillableForNewAbsence,
+} from "./absenceConfig.js";
 import AuthScreen from "./AuthScreen.jsx";
 import { buildFormalPlanDocument } from "./supportPlanMapper.js";
 import { buildMappedSpecializedPlan } from "./specializedPlanMapper.js";
@@ -127,6 +135,7 @@ const HOME_MENU_ENABLED_SCREENS = new Set([
   "familySupport",
   "parentingSupport",
   "shift",
+  "absence",
   "case",
 ]);
 
@@ -191,6 +200,14 @@ const HOME_MENU_ITEMS = [
     icon: "📅",
     available: true,
     screen: "shift",
+  },
+  {
+    id: "absence",
+    title: "欠席管理",
+    description: "LINE欠席連絡・加算管理・日程表",
+    icon: "📵",
+    available: true,
+    screen: "absence",
   },
   {
     id: "case",
@@ -1583,6 +1600,22 @@ export default function App() {
   const [editingShiftStaffId, setEditingShiftStaffId] = useState(null);
   const [shiftStaffPanelOpen, setShiftStaffPanelOpen] = useState(false);
   const [shiftSaveBusy, setShiftSaveBusy] = useState(false);
+  const [absenceRecords, setAbsenceRecords] = useState([]);
+  const [childServiceSchedules, setChildServiceSchedules] = useState([]);
+  const [lineGuardianLinks, setLineGuardianLinks] = useState([]);
+  const [absenceYearMonth, setAbsenceYearMonth] = useState(currentYearMonth);
+  const [absenceSelectedDate, setAbsenceSelectedDate] = useState(null);
+  const [absenceForm, setAbsenceForm] = useState(createDefaultAbsenceForm);
+  const [scheduleForm, setScheduleForm] = useState(createDefaultScheduleForm);
+  const [lineLinkForm, setLineLinkForm] = useState({
+    lineUserId: "",
+    childId: "",
+    guardianLabel: "",
+  });
+  const [absenceStaffName, setAbsenceStaffName] = useState(
+    () => loadWorkspaceSettings().defaultAuthorName ?? "",
+  );
+  const [absenceSaveBusy, setAbsenceSaveBusy] = useState(false);
   const [therapyCaseExamples, setTherapyCaseExamples] = useState([]);
   const [caseExampleForm, setCaseExampleForm] = useState(
     createDefaultCaseExampleForm,
@@ -1724,6 +1757,9 @@ export default function App() {
           setParentingSupportRecords(w.parentingSupportRecords ?? []);
           setShiftStaff(w.shiftStaff ?? []);
           setShiftEntries(w.shiftEntries ?? []);
+          setAbsenceRecords(w.absenceRecords ?? []);
+          setChildServiceSchedules(w.childServiceSchedules ?? []);
+          setLineGuardianLinks(w.lineGuardianLinks ?? []);
           setTherapyCaseExamples(w.therapyCaseExamples ?? []);
         })
         .catch((e) => {
@@ -3028,6 +3064,16 @@ export default function App() {
     [shiftEntries, shiftStaff, shiftYearMonth],
   );
 
+  const absencePreviousMonthSummary = useMemo(
+    () =>
+      buildPreviousMonthSummary(
+        absenceRecords,
+        children,
+        previousYearMonth(),
+      ),
+    [absenceRecords, children],
+  );
+
   const handleSelectShiftDate = (dateStr) => {
     setShiftSelectedDate(dateStr);
     setShiftEntryForm(createDefaultShiftEntryForm(dateStr));
@@ -3198,6 +3244,200 @@ export default function App() {
     }
   };
 
+  const handleSaveAbsence = async () => {
+    if (!absenceForm.childId || !absenceForm.reason.trim()) {
+      setError("児童と理由を入力してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+    const child = children.find(
+      (c) => String(c.id) === String(absenceForm.childId),
+    );
+    if (!child) return;
+
+    setAbsenceSaveBusy(true);
+    setError(null);
+    try {
+      const { billable, billableNote } = resolveBillableForNewAbsence(
+        absenceRecords,
+        absenceForm.childId,
+        absenceForm.absenceDate,
+      );
+      const createdAt = new Date().toISOString();
+      const entry = {
+        id: `abs-${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        childId: child.id,
+        childName: child.name,
+        absenceDate: absenceForm.absenceDate,
+        reason: absenceForm.reason.trim(),
+        source: "staff",
+        lineUserId: "",
+        lineMessage: "",
+        aiParsed: {},
+        contactedAt: null,
+        contactedBy: "",
+        billable,
+        billableNote,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      await workspaceDb.insertAbsenceRecord(supabase, session.user.id, entry);
+      setAbsenceRecords((prev) => [entry, ...prev]);
+      setAbsenceForm(createDefaultAbsenceForm());
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAbsenceSaveBusy(false);
+    }
+  };
+
+  const handleMarkAbsenceContacted = async (absenceId) => {
+    if (!supabase || !session?.user?.id) return;
+    setAbsenceSaveBusy(true);
+    setError(null);
+    try {
+      const contactedAt = await workspaceDb.markAbsenceContacted(
+        supabase,
+        session.user.id,
+        absenceId,
+        absenceStaffName.trim(),
+      );
+      setAbsenceRecords((prev) =>
+        prev.map((r) =>
+          r.id === absenceId
+            ? {
+                ...r,
+                contactedAt,
+                contactedBy: absenceStaffName.trim(),
+                updatedAt: contactedAt,
+              }
+            : r,
+        ),
+      );
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAbsenceSaveBusy(false);
+    }
+  };
+
+  const handleDeleteAbsence = async (absenceId) => {
+    if (!supabase || !session?.user?.id) return;
+    if (!window.confirm("この欠席記録を削除しますか？")) return;
+    try {
+      await workspaceDb.deleteAbsenceRecord(
+        supabase,
+        session.user.id,
+        absenceId,
+      );
+      setAbsenceRecords((prev) => prev.filter((r) => r.id !== absenceId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleSaveChildSchedule = async () => {
+    if (!scheduleForm.childId) {
+      setError("児童を選択してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+    const child = children.find(
+      (c) => String(c.id) === String(scheduleForm.childId),
+    );
+    if (!child) return;
+
+    setAbsenceSaveBusy(true);
+    setError(null);
+    try {
+      const row = await workspaceDb.insertChildServiceSchedule(
+        supabase,
+        session.user.id,
+        {
+          childId: child.id,
+          childName: child.name,
+          dayOfWeek: scheduleForm.dayOfWeek,
+          startTime: scheduleForm.startTime,
+          endTime: scheduleForm.endTime,
+          notes: "",
+        },
+      );
+      setChildServiceSchedules((prev) => [...prev, row]);
+      setScheduleForm(createDefaultScheduleForm());
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAbsenceSaveBusy(false);
+    }
+  };
+
+  const handleDeleteChildSchedule = async (scheduleId) => {
+    if (!supabase || !session?.user?.id) return;
+    try {
+      await workspaceDb.deleteChildServiceSchedule(
+        supabase,
+        session.user.id,
+        scheduleId,
+      );
+      setChildServiceSchedules((prev) =>
+        prev.filter((s) => s.id !== scheduleId),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleSaveLineLink = async () => {
+    if (!lineLinkForm.lineUserId.trim() || !lineLinkForm.childId) {
+      setError("LINEユーザーIDと児童を入力してください。");
+      return;
+    }
+    if (!supabase || !session?.user?.id) return;
+    const child = children.find(
+      (c) => String(c.id) === String(lineLinkForm.childId),
+    );
+    if (!child) return;
+
+    setAbsenceSaveBusy(true);
+    setError(null);
+    try {
+      const row = await workspaceDb.insertLineGuardianLink(
+        supabase,
+        session.user.id,
+        {
+          lineUserId: lineLinkForm.lineUserId.trim(),
+          childId: child.id,
+          childName: child.name,
+          guardianLabel: lineLinkForm.guardianLabel.trim(),
+        },
+      );
+      setLineGuardianLinks((prev) => [row, ...prev]);
+      setLineLinkForm({ lineUserId: "", childId: "", guardianLabel: "" });
+      showSaveToast();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAbsenceSaveBusy(false);
+    }
+  };
+
+  const handleDeleteLineLink = async (linkId) => {
+    if (!supabase || !session?.user?.id) return;
+    try {
+      await workspaceDb.deleteLineGuardianLink(
+        supabase,
+        session.user.id,
+        linkId,
+      );
+      setLineGuardianLinks((prev) => prev.filter((l) => l.id !== linkId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const handleExportProgramPdf = useCallback(async () => {
     if (!selectedChild || !generatedProgram.trim() || !generatedMappedPlan) return;
     setPdfBusy(true);
@@ -3264,6 +3504,7 @@ export default function App() {
       screen === "familySupport" ||
       screen === "parentingSupport" ||
       screen === "shift" ||
+      screen === "absence" ||
       screen === "case"
     ) {
       setScreen("home");
@@ -3530,6 +3771,8 @@ export default function App() {
                       ? "子育てサポート"
                     : screen === "shift"
                       ? "シフト作成"
+                      : screen === "absence"
+                        ? "欠席管理"
                       : screen === "case"
                         ? "療育の事例出し"
                         : "個別発達支援プログラム管理"}
@@ -4260,6 +4503,37 @@ export default function App() {
             onDeleteEntry={(id) => void handleDeleteShiftEntry(id)}
             onSaveStaff={() => void handleSaveShiftStaff()}
             onDeleteStaff={(id) => void handleDeleteShiftStaff(id)}
+          />
+        )}
+        {screen === "absence" && (
+          <AbsenceScreen
+            s={s}
+            childrenList={children}
+            absences={absenceRecords}
+            schedules={childServiceSchedules}
+            lineLinks={lineGuardianLinks}
+            yearMonth={absenceYearMonth}
+            onPrevMonth={() => setAbsenceYearMonth((ym) => addMonths(ym, -1))}
+            onNextMonth={() => setAbsenceYearMonth((ym) => addMonths(ym, 1))}
+            selectedDate={absenceSelectedDate}
+            onSelectDate={setAbsenceSelectedDate}
+            previousMonthSummary={absencePreviousMonthSummary}
+            absenceForm={absenceForm}
+            setAbsenceForm={setAbsenceForm}
+            scheduleForm={scheduleForm}
+            setScheduleForm={setScheduleForm}
+            lineLinkForm={lineLinkForm}
+            setLineLinkForm={setLineLinkForm}
+            saveBusy={absenceSaveBusy}
+            onSaveAbsence={() => void handleSaveAbsence()}
+            onMarkContacted={(id) => void handleMarkAbsenceContacted(id)}
+            onDeleteAbsence={(id) => void handleDeleteAbsence(id)}
+            onSaveSchedule={() => void handleSaveChildSchedule()}
+            onDeleteSchedule={(id) => void handleDeleteChildSchedule(id)}
+            onSaveLineLink={() => void handleSaveLineLink()}
+            onDeleteLineLink={(id) => void handleDeleteLineLink(id)}
+            staffName={absenceStaffName}
+            setStaffName={setAbsenceStaffName}
           />
         )}
         {screen === "list" && (

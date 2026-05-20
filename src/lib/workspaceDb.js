@@ -212,6 +212,53 @@ function parentingSupportFromRow(r) {
   };
 }
 
+function absenceRecordFromRow(r) {
+  const absenceDate = r.absence_date
+    ? String(r.absence_date).slice(0, 10)
+    : "";
+  return {
+    id: r.id,
+    childId: r.child_id ?? null,
+    childName: r.child_name ?? "",
+    absenceDate,
+    reason: r.reason ?? "",
+    source: r.source ?? "staff",
+    lineUserId: r.line_user_id ?? "",
+    lineMessage: r.line_message ?? "",
+    aiParsed: r.ai_parsed ?? {},
+    contactedAt: r.contacted_at ?? null,
+    contactedBy: r.contacted_by ?? "",
+    billable: Boolean(r.billable),
+    billableNote: r.billable_note ?? "",
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function childServiceScheduleFromRow(r) {
+  return {
+    id: r.id,
+    childId: r.child_id,
+    childName: r.child_name ?? "",
+    dayOfWeek: r.day_of_week ?? 0,
+    startTime: r.start_time ?? "",
+    endTime: r.end_time ?? "",
+    notes: r.notes ?? "",
+    createdAt: r.created_at,
+  };
+}
+
+function lineGuardianLinkFromRow(r) {
+  return {
+    id: r.id,
+    lineUserId: r.line_user_id ?? "",
+    childId: r.child_id,
+    childName: r.child_name ?? "",
+    guardianLabel: r.guardian_label ?? "",
+    createdAt: r.created_at,
+  };
+}
+
 function accidentReportFromRow(r) {
   const reportDate = r.report_date
     ? String(r.report_date).slice(0, 10)
@@ -256,6 +303,9 @@ export async function fetchWorkspace(supabase, userId) {
     { data: tcRows, error: e12 },
     { data: sspRows, error: e13 },
     { data: psRows, error: e14 },
+    { data: abRows, error: e15 },
+    { data: csRows, error: e16 },
+    { data: lgRows, error: e17 },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -308,9 +358,24 @@ export async function fetchWorkspace(supabase, userId) {
       .select("*")
       .eq("user_id", userId)
       .order("conducted_at", { ascending: false }),
+    supabase
+      .from("absence_records")
+      .select("*")
+      .eq("user_id", userId)
+      .order("absence_date", { ascending: false }),
+    supabase
+      .from("child_service_schedules")
+      .select("*")
+      .eq("user_id", userId)
+      .order("day_of_week", { ascending: true }),
+    supabase
+      .from("line_guardian_links")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
   ]);
   const err =
-    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12 || e13 || e14;
+    e1 || e2 || e3 || e4 || e5 || e6 || e7 || e8 || e9 || e10 || e11 || e12 || e13 || e14 || e15 || e16 || e17;
   if (err) throw err;
   return {
     children: (chRows ?? []).map(childFromRow),
@@ -327,6 +392,9 @@ export async function fetchWorkspace(supabase, userId) {
     therapyCaseExamples: (tcRows ?? []).map(therapyCaseExampleFromRow),
     savedSpecializedPlans: (sspRows ?? []).map(savedSpecializedPlanFromRow),
     parentingSupportRecords: (psRows ?? []).map(parentingSupportFromRow),
+    absenceRecords: (abRows ?? []).map(absenceRecordFromRow),
+    childServiceSchedules: (csRows ?? []).map(childServiceScheduleFromRow),
+    lineGuardianLinks: (lgRows ?? []).map(lineGuardianLinkFromRow),
   };
 }
 
@@ -412,6 +480,21 @@ export async function syncChildNameAcrossWorkspace(supabase, userId, childId, ne
       .eq("child_id", cid),
     supabase
       .from("parenting_support_records")
+      .update({ child_name: newName })
+      .eq("user_id", userId)
+      .eq("child_id", cid),
+    supabase
+      .from("absence_records")
+      .update({ child_name: newName })
+      .eq("user_id", userId)
+      .eq("child_id", cid),
+    supabase
+      .from("child_service_schedules")
+      .update({ child_name: newName })
+      .eq("user_id", userId)
+      .eq("child_id", cid),
+    supabase
+      .from("line_guardian_links")
       .update({ child_name: newName })
       .eq("user_id", userId)
       .eq("child_id", cid),
@@ -707,5 +790,112 @@ export async function insertProgramEditFeedback(supabase, userId, entry) {
     child_name: entry.childName,
     created_at: entry.date,
   });
+  if (error) throw error;
+}
+
+export async function insertAbsenceRecord(supabase, userId, entry) {
+  const { error } = await supabase.from("absence_records").insert({
+    id: entry.id,
+    user_id: userId,
+    child_id: entry.childId ?? null,
+    child_name: entry.childName ?? "",
+    absence_date: entry.absenceDate,
+    reason: entry.reason ?? "",
+    source: entry.source ?? "staff",
+    line_user_id: entry.lineUserId ?? "",
+    line_message: entry.lineMessage ?? "",
+    ai_parsed: entry.aiParsed ?? {},
+    contacted_at: entry.contactedAt ?? null,
+    contacted_by: entry.contactedBy ?? "",
+    billable: Boolean(entry.billable),
+    billable_note: entry.billableNote ?? "",
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt ?? entry.createdAt,
+  });
+  if (error) throw error;
+}
+
+export async function markAbsenceContacted(
+  supabase,
+  userId,
+  absenceId,
+  contactedBy,
+) {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("absence_records")
+    .update({
+      contacted_at: now,
+      contacted_by: contactedBy ?? "",
+      updated_at: now,
+    })
+    .eq("id", absenceId)
+    .eq("user_id", userId);
+  if (error) throw error;
+  return now;
+}
+
+export async function deleteAbsenceRecord(supabase, userId, absenceId) {
+  const { error } = await supabase
+    .from("absence_records")
+    .delete()
+    .eq("id", absenceId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function insertChildServiceSchedule(supabase, userId, entry) {
+  const { data, error } = await supabase
+    .from("child_service_schedules")
+    .insert({
+      user_id: userId,
+      child_id: entry.childId,
+      child_name: entry.childName ?? "",
+      day_of_week: entry.dayOfWeek,
+      start_time: entry.startTime ?? "",
+      end_time: entry.endTime ?? "",
+      notes: entry.notes ?? "",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return childServiceScheduleFromRow(data);
+}
+
+export async function deleteChildServiceSchedule(
+  supabase,
+  userId,
+  scheduleId,
+) {
+  const { error } = await supabase
+    .from("child_service_schedules")
+    .delete()
+    .eq("id", scheduleId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function insertLineGuardianLink(supabase, userId, entry) {
+  const { data, error } = await supabase
+    .from("line_guardian_links")
+    .insert({
+      user_id: userId,
+      line_user_id: entry.lineUserId.trim(),
+      child_id: entry.childId,
+      child_name: entry.childName ?? "",
+      guardian_label: entry.guardianLabel ?? "",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return lineGuardianLinkFromRow(data);
+}
+
+export async function deleteLineGuardianLink(supabase, userId, linkId) {
+  const { error } = await supabase
+    .from("line_guardian_links")
+    .delete()
+    .eq("id", linkId)
+    .eq("user_id", userId);
   if (error) throw error;
 }
